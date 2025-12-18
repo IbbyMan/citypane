@@ -644,33 +644,33 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
           )}
 
           {/* UI Overlay - Enlarged elements for better readability */}
-          <div className={`absolute inset-x-0 flex justify-between items-start z-50 pointer-events-none ${isExpanded ? 'top-10 px-12' : 'top-5 px-5'}`}>
+          <div className={`absolute inset-x-0 flex justify-between items-start z-50 pointer-events-none ${isExpanded ? 'top-4 px-4 sm:top-10 sm:px-12' : 'top-5 px-5'}`}>
             <div className="flex flex-col">
               {/* Time Display - Significantly Larger */}
               {(() => {
                 const specialTime = city.isSpecial ? getSpecialTimeDisplay(city.id, weather.localTime) : null;
                 if (specialTime && specialTime.text) {
                   return (
-                    <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${specialTime.className} ${isExpanded ? 'text-4xl' : 'text-xl font-medium'}`}>
+                    <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${specialTime.className} ${isExpanded ? 'text-xl sm:text-4xl' : 'text-xl font-medium'}`}>
                       {specialTime.text}
                     </span>
                   );
                 }
                 return (
-                  <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${city.isSpecial ? 'text-cyan-400' : 'text-white/95'} ${isExpanded ? 'text-4xl' : 'text-xl font-medium'}`}>
+                  <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${city.isSpecial ? 'text-cyan-400' : 'text-white/95'} ${isExpanded ? 'text-xl sm:text-4xl' : 'text-xl font-medium'}`}>
                     {formatTime(weather.localTime)}
                   </span>
                 );
               })()}
             </div>
             <div className="flex flex-col items-end">
-               <div className="flex items-center gap-2">
+               <div className="flex items-center gap-1 sm:gap-2">
                   {/* Temperature Display - with special neon colors */}
-                  <span className={`font-mono drop-shadow-md ${getSpecialTempColor(weather.temp, city.isSpecial)} ${isExpanded ? 'text-4xl' : 'text-2xl font-light'}`}>
+                  <span className={`font-mono drop-shadow-md ${getSpecialTempColor(weather.temp, city.isSpecial)} ${isExpanded ? 'text-xl sm:text-4xl' : 'text-2xl font-light'}`}>
                     {city.isSpecial && weather.temp === 404 ? 'ERR' : weather.temp}°
                   </span>
                   {/* Weather Icon - Larger (hide for special locations) */}
-                  {!city.isSpecial && <Icon size={isExpanded ? 24 : 20} className="text-white/90 drop-shadow-md" />}
+                  {!city.isSpecial && <Icon size={isExpanded ? 16 : 20} className="text-white/90 drop-shadow-md sm:w-6 sm:h-6" />}
                </div>
                {/* Sound Mute Button - only show in expanded mode */}
                {isExpanded && (
@@ -679,13 +679,13 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
                      e.stopPropagation();
                      toggleMute();
                    }}
-                   className="mt-3 p-2 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all pointer-events-auto"
+                   className="mt-2 sm:mt-3 p-1.5 sm:p-2 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all pointer-events-auto"
                    title={isMuted ? '开启声音' : '静音'}
                  >
                    {isMuted ? (
-                     <VolumeX size={20} className="text-white/60" />
+                     <VolumeX size={16} className="text-white/60 sm:w-5 sm:h-5" />
                    ) : (
-                     <Volume2 size={20} className="text-white/80" />
+                     <Volume2 size={16} className="text-white/80 sm:w-5 sm:h-5" />
                    )}
                  </button>
                )}
@@ -693,11 +693,11 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
           </div>
 
           <div className={`absolute inset-x-0 bottom-0 z-50 pointer-events-none
-            ${isExpanded ? 'p-20' : 'p-6 pb-7'}
+            ${isExpanded ? 'p-4 sm:p-20' : 'p-6 pb-7'}
           `}>
             <div className="flex flex-col items-center text-center">
               {/* Nickname - Larger */}
-              <span className={`tracking-[0.3em] uppercase mb-1 font-medium drop-shadow-md ${city.isSpecial ? 'text-cyan-400/80' : 'text-white/70'} ${isExpanded ? 'text-sm' : 'text-[10px]'}`}>
+              <span className={`tracking-[0.3em] uppercase mb-1 font-medium drop-shadow-md ${city.isSpecial ? 'text-cyan-400/80' : 'text-white/70'} ${isExpanded ? 'text-[10px] sm:text-sm' : 'text-[10px]'}`}>
                 {frame.nickname}
               </span>
               
