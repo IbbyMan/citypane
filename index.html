@@ -1,0 +1,85 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CityPane | 窗中城</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/citypane-logo.png" />
+    <link rel="apple-touch-icon" href="/citypane-logo.png" />
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="CityPane | 窗中城" />
+    <meta property="og:description" content="一扇在浏览器里共同打开的城市窗口，和远方的人分享同一片随时间与天气变化的窗边景色" />
+    <meta property="og:image" href="/citypane-logo.png" />
+    <meta property="og:type" content="website" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="CityPane | 窗中城" />
+    <meta name="twitter:description" content="一扇在浏览器里共同打开的城市窗口" />
+    <meta name="twitter:image" href="/citypane-logo.png" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=Noto+Serif+SC:wght@300;400;700&family=Inter:wght@200;300;400;500&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', 'Noto Serif SC', sans-serif;
+        background-color: #f8fafc; /* Slate 50 */
+        color: #1e293b; /* Slate 800 */
+        margin: 0;
+        overflow-x: hidden;
+      }
+      .font-serif-sc {
+        font-family: 'Noto Serif SC', serif;
+      }
+      .font-mystical {
+        font-family: 'Almendra', serif;
+      }
+      /* Nordic / Frosted Glass Theme */
+      .nordic-bg {
+        background: linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 100%);
+      }
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+      }
+      .glass-panel-dark {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+
+{
+  "name": "CityPane (窗中城)",
+  "description": "Cross the distance now, watch the same window with people far away. A Nordic-style emotional weather gallery.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

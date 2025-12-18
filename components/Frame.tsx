@@ -1,0 +1,749 @@
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { UserFrame, WeatherStatus, WeatherType, SpecialWeatherType } from '../types';
+import { CITIES_DB } from '../constants';
+import { fetchRealWeather, formatTime, getTimeOfDay } from '../utils/weather';
+import { useAmbientSound } from '../utils/useAmbientSound';
+import TimeFilter from './TimeFilter';
+import WeatherCanvas from './WeatherCanvas';
+import { Moon, Sun, Sparkles, RefreshCw, WifiOff, Volume2, VolumeX } from 'lucide-react';
+
+// Pixelate image using Canvas - downsample then upscale with nearest-neighbor
+const pixelateImage = (
+  img: HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number,
+  pixelSize: number = 2 // How many pixels to merge into one (smaller = subtler effect)
+): string => {
+  // Step 1: Create small canvas for downsampling
+  const smallWidth = Math.floor(targetWidth / pixelSize);
+  const smallHeight = Math.floor(targetHeight / pixelSize);
+  
+  const smallCanvas = document.createElement('canvas');
+  smallCanvas.width = smallWidth;
+  smallCanvas.height = smallHeight;
+  const smallCtx = smallCanvas.getContext('2d')!;
+  
+  // Disable smoothing for crisp pixels
+  smallCtx.imageSmoothingEnabled = false;
+  smallCtx.drawImage(img, 0, 0, smallWidth, smallHeight);
+  
+  // Step 2: Subtle color quantization - more colors for natural look
+  const imageData = smallCtx.getImageData(0, 0, smallWidth, smallHeight);
+  const data = imageData.data;
+  
+  // 12 levels per channel = 1728 colors (much more natural)
+  const levels = 12;
+  const step = 255 / (levels - 1);
+  
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.round(data[i] / step) * step;     // R
+    data[i + 1] = Math.round(data[i + 1] / step) * step; // G
+    data[i + 2] = Math.round(data[i + 2] / step) * step; // B
+    // Alpha stays unchanged
+  }
+  
+  smallCtx.putImageData(imageData, 0, 0);
+  
+  // Step 3: Scale up to target size with nearest-neighbor (no smoothing)
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = targetWidth;
+  finalCanvas.height = targetHeight;
+  const finalCtx = finalCanvas.getContext('2d')!;
+  
+  // Critical: disable image smoothing for pixelated upscale
+  finalCtx.imageSmoothingEnabled = false;
+  finalCtx.drawImage(smallCanvas, 0, 0, targetWidth, targetHeight);
+  
+  return finalCanvas.toDataURL('image/png');
+};
+
+interface FrameProps {
+  frame: UserFrame;
+  onClick?: () => void;
+  isExpanded?: boolean;
+  firstCityName?: string;
+}
+
+// Helper: Generate random loading message (with special version for fictional locations)
+const getLoadingMessage = (
+  cityName: string, 
+  nickname: string, 
+  firstCityName?: string,
+  time?: string,
+  weather?: string,
+  isSpecial?: boolean
+): string => {
+  if (isSpecial) {
+    return '正在校准坐标，准备跃迁...';
+  }
+  const messages = [
+    `正在折叠 ${firstCityName || '这里'} 与 ${cityName} 之间的地图...`,
+    `正在捕获 ${cityName} 的季风...`,
+    `我想看看 ${nickname} 的窗外...`,
+    `正在将 ${cityName} 的 ${time || '此刻'} 凝固进画框...`,
+    `正在聆听 ${cityName} 此刻的 ${weather || '天气'} ...`,
+  ];
+  return messages[Math.floor(Math.random() * messages.length)];
+};
+
+// Helper: Get special weather description for fictional locations
+const getSpecialWeatherDescription = (specialWeather: SpecialWeatherType): string => {
+  switch (specialWeather) {
+    case 'Vacuum':
+      return 'absolute vacuum of space, no atmosphere, harsh shadows, stark contrast between light and dark, cosmic radiation';
+    case 'GasGiant':
+      return 'swirling gas storms, ammonia clouds, extreme pressure atmosphere, cosmic winds, diamond rain';
+    case 'DeepSea':
+      return 'crushing water pressure, bioluminescent creatures, eternal darkness, underwater currents, ancient mystery';
+    case 'Glitch':
+      return 'digital corruption, data fragments, broken reality, static noise, system malfunction';
+    default:
+      return '';
+  }
+};
+
+// Helper: Get temperature display color for special locations
+const getSpecialTempColor = (temp: number, isSpecial?: boolean): string => {
+  if (!isSpecial) return 'text-white/95';
+  if (temp === 404) return 'text-red-500 animate-pulse'; // Glitch city error code
+  if (temp <= -100) return 'text-cyan-400'; // Extreme cold - neon cyan
+  if (temp <= 0) return 'text-blue-400'; // Cold - blue
+  return 'text-emerald-400'; // Deep sea - green
+};
+
+// Helper: Get time display for special locations
+const getSpecialTimeDisplay = (cityId: string, time: Date): { text: string; className: string } => {
+  if (cityId === 'glitch_city') {
+    // Glitch city shows question marks with red pulse
+    return { text: '??:??', className: 'text-red-500 animate-pulse' };
+  }
+  if (cityId === 'moon_base' || cityId === 'saturn_ring') {
+    // Space locations show question marks with cyan color
+    return { text: '??:??', className: 'text-cyan-400' };
+  }
+  return { text: '', className: '' };
+};
+
+// Helper: Calculate season based on month and hemisphere (lat)
+const getSeason = (lat: number, date: Date): string => {
+  const month = date.getMonth(); // 0-11
+  const isNorth = lat >= 0;
+  
+  if (isNorth) {
+    if (month === 11 || month === 0 || month === 1) return 'Winter';
+    if (month >= 2 && month <= 4) return 'Spring';
+    if (month >= 5 && month <= 7) return 'Summer';
+    return 'Autumn';
+  } else {
+    if (month === 11 || month === 0 || month === 1) return 'Summer';
+    if (month >= 2 && month <= 4) return 'Autumn';
+    if (month >= 5 && month <= 7) return 'Winter';
+    return 'Spring';
+  }
+};
+
+// Helper: Check if aurora borealis/australis should appear
+// Conditions: high latitude (>60° or <-60°), winter season, night time (21:00-05:00)
+const shouldShowAurora = (lat: number, date: Date): boolean => {
+  const absLat = Math.abs(lat);
+  
+  // Only show aurora at high latitudes (60° and above)
+  if (absLat < 60) return false;
+  
+  const month = date.getMonth(); // 0-11
+  const hour = date.getHours();
+  const isNorth = lat >= 0;
+  
+  // Check if it's winter season (aurora season)
+  // Northern hemisphere: September(8) to March(2)
+  // Southern hemisphere: March(2) to September(8)
+  let isAuroraSeason = false;
+  if (isNorth) {
+    // Northern aurora season: Sep-Mar (months 8,9,10,11,0,1,2)
+    isAuroraSeason = month >= 8 || month <= 2;
+  } else {
+    // Southern aurora season: Mar-Sep (months 2,3,4,5,6,7,8)
+    isAuroraSeason = month >= 2 && month <= 8;
+  }
+  
+  if (!isAuroraSeason) return false;
+  
+  // Check if it's night time (21:00 - 05:00)
+  const isNightTime = hour >= 21 || hour <= 5;
+  
+  return isNightTime;
+};
+
+// Helper: Get aurora prompt based on hemisphere
+const getAuroraPrompt = (lat: number): string => {
+  if (lat >= 0) {
+    return 'spectacular aurora borealis dancing in the night sky, green and purple northern lights, magical polar lights';
+  } else {
+    return 'spectacular aurora australis dancing in the night sky, green and purple southern lights, magical polar lights';
+  }
+};
+
+// Helper: Get descriptive weather prompt
+const getWeatherDescription = (code: WeatherType): string => {
+  switch (code) {
+    case 'Clear': return "Clear blue sky, sunny, bright sunlight, sharp shadows, vibrant colors";
+    case 'LightRain': return "Light rain drizzle, wet ground reflections, overcast grey sky, people with umbrellas, cinematic wet street look";
+    case 'HeavyRain': return "Heavy torrential downpour, storm, puddles on ground, dark dramatic clouds, moody atmosphere";
+    case 'Snow': return "Snowing, white snow covering ground and rooftops, winter cold atmosphere, soft white lighting";
+    case 'Fog': return "Foggy, misty, low visibility, ethereal dreamy atmosphere, soft diffused light";
+    case 'Windy': return "Windy, swaying trees, dynamic motion in air, leaves blowing in wind";
+    default: return "Clear sky";
+  }
+};
+
+// Fixed background for loading/empty state (The "Blank Window" Map)
+// Using a deep dark slate with a subtle inner shadow/gradient to resemble an unlit window at night
+const FIXED_LOADING_BG = "bg-[#1e2330]";
+
+const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName }) => {
+  const city = useMemo(() => CITIES_DB.find(c => c.id === frame.cityId), [frame.cityId]);
+  const [weather, setWeather] = useState<WeatherStatus | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [pixelatedUrl, setPixelatedUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+
+  // Ambient sound effect - plays when expanded
+  const { isMuted, toggleMute } = useAmbientSound({
+    isExpanded: isExpanded ?? false,
+    city,
+    weatherCode: weather?.weatherCode ?? 'Clear',
+    hour: weather?.localTime.getHours() ?? 12,
+  });
+  
+  // Post-process image to add pixel effect
+  const processPixelArt = useCallback((srcUrl: string) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      // Target size for display - use larger size for expanded view
+      const targetWidth = isExpanded ? 1024 : 512;
+      const targetHeight = isExpanded ? 1536 : 768;
+      const pixelSize = isExpanded ? 3 : 2; // Subtler pixel effect
+      
+      try {
+        const result = pixelateImage(img, targetWidth, targetHeight, pixelSize);
+        setPixelatedUrl(result);
+      } catch (e) {
+        console.warn("Pixelation failed, using original", e);
+        setPixelatedUrl(srcUrl);
+      }
+    };
+    img.onerror = () => {
+      setPixelatedUrl(srcUrl);
+    };
+    img.src = srcUrl;
+  }, [isExpanded]);
+
+  // Helper: Generate fake weather for special locations
+  const getSpecialWeather = useCallback((): WeatherStatus => {
+    const now = new Date();
+    // Use a fictional "universal time" for special locations
+    return {
+      temp: city?.specialTemp ?? 0,
+      weatherCode: 'Clear' as WeatherType, // Will be overridden by special rendering
+      localTime: now
+    };
+  }, [city?.specialTemp]);
+
+  // Sync real-time clock and weather
+  useEffect(() => {
+    if (!city) return;
+
+    let isMounted = true;
+
+    const updateWeather = async () => {
+      // For special locations, use fake weather
+      if (city.isSpecial) {
+        if (isMounted) {
+          setWeather(getSpecialWeather());
+        }
+        return;
+      }
+      
+      const data = await fetchRealWeather(city.geo, city.id, city.timezoneOffset);
+      if (isMounted) {
+        setWeather(data);
+      }
+    };
+
+    updateWeather();
+    const weatherTimer = setInterval(updateWeather, 15 * 60 * 1000);
+    const clockTimer = setInterval(() => {
+      setWeather(prev => {
+        if (!prev) return null;
+        const now = new Date();
+        // For special locations, just use current time
+        if (city.isSpecial) {
+          return { ...prev, localTime: now };
+        }
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        return {
+          ...prev,
+          localTime: new Date(utc + (3600000 * city.timezoneOffset))
+        };
+      });
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(weatherTimer);
+      clearInterval(clockTimer);
+    };
+  }, [city, getSpecialWeather]);
+
+  // Derived state for generation stability
+  const generationKeys = useMemo(() => {
+    if (!city || !weather) return null;
+    const timeOfDay = getTimeOfDay(weather.localTime.getHours());
+    const season = getSeason(city.geo.lat, weather.localTime);
+    const weatherCode = weather.weatherCode;
+    return { timeOfDay, season, weatherCode };
+  }, [city, weather?.weatherCode, weather ? getTimeOfDay(weather.localTime.getHours()) : null]);
+
+  // Function to trigger generation (exposed for manual retry)
+  const generateArt = async () => {
+    if (!city || !generationKeys) return;
+    
+    setHasError(false);
+    setIsGenerating(true);
+
+    const { timeOfDay, season, weatherCode } = generationKeys;
+    const weatherDesc = getWeatherDescription(weatherCode);
+    
+    // Set random loading message (special version for fictional locations)
+    setLoadingMessage(getLoadingMessage(
+      city.name_cn, 
+      frame.nickname, 
+      firstCityName,
+      timeOfDay,
+      weatherCode,
+      city.isSpecial
+    ));
+    
+    // Check aurora condition for cache key (not applicable for special locations)
+    const hasAuroraForCache = !city.isSpecial && weather ? shouldShowAurora(city.geo.lat, weather.localTime) : false;
+    const cacheKey = `pixel_art_v13_${city.id}_${timeOfDay}_${weatherCode}_${season}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
+
+    // Check cache first
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        setImageUrl(cached);
+        processPixelArt(cached);
+        setIsGenerating(false);
+        return;
+      }
+    } catch (e) {
+      console.warn("Could not read from session storage", e);
+    }
+
+    try {
+      // For special locations, use a completely different prompt structure
+      if (city.isSpecial && city.specialWeather) {
+        const specialWeatherDesc = getSpecialWeatherDescription(city.specialWeather);
+        const specialPrompt = `pixel art, 16-bit retro game screenshot, ${city.visual_prompt}, ${specialWeatherDesc}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background, sci-fi retro aesthetic`.trim();
+        
+        const seed = Math.floor(Math.random() * 1000000);
+        const encodedPrompt = encodeURIComponent(specialPrompt);
+        const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=768&model=flux&nologo=true&seed=${seed}`;
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("Image failed to load"));
+          img.src = generatedImageUrl;
+        });
+
+        setImageUrl(generatedImageUrl);
+        processPixelArt(generatedImageUrl);
+        
+        try {
+          sessionStorage.setItem(cacheKey, generatedImageUrl);
+        } catch (storageError) {
+          console.warn("Storage quota exceeded, skipping cache for this image.");
+        }
+        
+        setIsGenerating(false);
+        return;
+      }
+
+      // Build time-specific lighting (for normal locations)
+      const timeLighting = timeOfDay === 'Dawn' 
+        ? 'golden pink sunrise, early morning glow'
+        : timeOfDay === 'Morning'
+        ? 'bright morning sunlight, clear blue sky'
+        : timeOfDay === 'Noon'
+        ? 'harsh midday sun, strong shadows'
+        : timeOfDay === 'Afternoon'
+        ? 'warm golden afternoon light, long shadows'
+        : timeOfDay === 'Dusk'
+        ? 'dramatic orange purple sunset, city lights turning on'
+        : timeOfDay === 'Evening'
+        ? 'blue hour twilight, city lights glowing'
+        : 'night scene, glowing neon signs, starry sky, warm window lights';
+
+      // Build season hint
+      const seasonHint = season === 'Spring'
+        ? 'spring cherry blossoms, fresh green'
+        : season === 'Summer'
+        ? 'summer lush greenery, vibrant colors'
+        : season === 'Autumn'
+        ? 'autumn golden red leaves, warm amber tones'
+        : 'winter bare trees, cold blue tones';
+
+      // Build weather effect for window
+      const weatherWindow = weatherCode === 'LightRain' || weatherCode === 'HeavyRain' 
+        ? 'raindrops on window glass, wet reflections' 
+        : weatherCode === 'Snow' 
+        ? 'frost on window edges, snow falling'
+        : '';
+
+      // Check for aurora conditions (high latitude + winter + night)
+      const hasAurora = shouldShowAurora(city.geo.lat, weather!.localTime);
+      const auroraPrompt = hasAurora ? `, ${getAuroraPrompt(city.geo.lat)}` : '';
+
+      // Optimized prompt for pixel art - emphasize retro game style
+      const prompt = `pixel art, 16-bit retro game screenshot, ${city.name_en} city view through window, ${city.visual_prompt}, ${timeLighting}, ${seasonHint}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background`.trim();
+
+      // Use Pollinations.ai - request SMALLER size for authentic pixel look
+      // Smaller native resolution = more pixel-like result when scaled up
+      const seed = Math.floor(Math.random() * 1000000);
+      const encodedPrompt = encodeURIComponent(prompt);
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=768&model=flux&nologo=true&seed=${seed}`;
+
+      // Preload image to verify it loads successfully
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Image failed to load"));
+        img.src = imageUrl;
+      });
+
+      setImageUrl(imageUrl);
+      
+      // Apply pixel post-processing
+      processPixelArt(imageUrl);
+      
+      // Cache the URL
+      try {
+        sessionStorage.setItem(cacheKey, imageUrl);
+      } catch (storageError) {
+        console.warn("Storage quota exceeded, skipping cache for this image.");
+      }
+
+    } catch (e) {
+      console.error("Art generation failed", e);
+      setHasError(true);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Initial Auto-Generation
+  useEffect(() => {
+    if (!city || !generationKeys || imageUrl || hasError || isGenerating) return;
+    generateArt();
+  }, [city, generationKeys, imageUrl, hasError, isGenerating]);
+
+  if (!city || !weather) {
+    // Skeleton Loading State
+    return (
+        <div className="h-full w-full rounded-2xl bg-slate-800 animate-pulse border-8 border-white/10" />
+    );
+  }
+
+  const hour = weather.localTime.getHours();
+  const Icon = hour >= 6 && hour < 18 ? Sun : Moon;
+
+  return (
+    <motion.div
+      layoutId={frame.uuid}
+      onClick={(e) => {
+        // Prevent click if we are clicking buttons
+        if ((e.target as HTMLElement).closest('button')) return;
+        if (!isExpanded && onClick) onClick();
+      }}
+      initial={false}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={isExpanded ? {} : { scale: 1.02, zIndex: 10 }}
+      transition={{ type: "spring", damping: 25, stiffness: 200 }}
+      // Added isolation-isolate to create a new stacking context
+      className={`relative cursor-pointer h-full w-full group isolation-isolate`}
+    >
+      <div 
+        className={`relative h-full w-full overflow-hidden transition-all duration-700
+          ${isExpanded ? 'rounded-none shadow-none' : 'rounded-2xl shadow-xl'}
+          ${FIXED_LOADING_BG}
+        `}
+        style={!isExpanded ? {
+          border: '8px solid white',
+          boxSizing: 'border-box',
+          boxShadow: `
+            0 20px 40px -10px rgba(0,0,0,0.3),
+            0 0 0 1px rgba(0,0,0,0.1)
+          `
+        } : {}}
+      >
+        <div className="absolute inset-0 w-full h-full overflow-hidden">
+          <AnimatePresence mode="wait">
+            {isGenerating ? (
+              <motion.div 
+                key="loading"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-50 bg-black/20 backdrop-blur-sm px-4"
+              >
+                <Sparkles className="text-white/60 animate-pulse" size={isExpanded ? 48 : 32} strokeWidth={1} />
+                <span className={`tracking-wide text-white/80 font-medium text-center font-serif-sc ${isExpanded ? 'text-base' : 'text-xs'}`}>{loadingMessage}</span>
+              </motion.div>
+            ) : hasError ? (
+               <motion.div 
+                key="error"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-40 bg-black/20 backdrop-blur-sm p-4 text-center"
+              >
+                <WifiOff className="text-white/50" size={32} />
+                <p className="text-white/60 text-xs uppercase tracking-widest">Signal Lost</p>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    generateArt();
+                  }}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/30 rounded-full text-white text-xs flex items-center gap-2 transition-all"
+                >
+                  <RefreshCw size={12} /> Retry
+                </button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="art" 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                className="absolute inset-0 w-full h-full"
+              >
+                {(pixelatedUrl || imageUrl) && (
+                  <img 
+                    src={pixelatedUrl || imageUrl} 
+                    alt={city.name_en}
+                    className="absolute inset-0 w-full h-full object-cover block"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                )}
+                
+                <TimeFilter hour={hour} />
+                <WeatherCanvas type={weather.weatherCode} isExpanded={isExpanded} />
+                
+                {/* Overlay gradients for text readability */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70 pointer-events-none z-30 opacity-80" />
+                
+                {/* Glass reflection effect - only in expanded mode */}
+                {isExpanded && (
+                  <>
+                    {/* Main glass blur overlay */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-40"
+                      style={{
+                        backdropFilter: 'blur(0.5px) saturate(1.1)',
+                        WebkitBackdropFilter: 'blur(0.5px) saturate(1.1)'
+                      }}
+                    />
+                    {/* Diagonal light reflection */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-40 opacity-[0.12]"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.5) 0%, transparent 25%, transparent 75%, rgba(255,255,255,0.15) 100%)'
+                      }}
+                    />
+                    {/* Horizontal light band - simulates glass refraction */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-40 opacity-[0.06]"
+                      style={{
+                        background: 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.3) 15%, transparent 30%, transparent 70%, rgba(255,255,255,0.2) 85%, transparent 100%)'
+                      }}
+                    />
+                    {/* Subtle window frame inner shadow */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-40"
+                      style={{
+                        boxShadow: 'inset 0 0 150px rgba(0,0,0,0.4), inset 0 0 50px rgba(0,0,0,0.25), inset 0 2px 4px rgba(255,255,255,0.1)'
+                      }}
+                    />
+                    {/* Glass edge highlight - top */}
+                    <div 
+                      className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none z-40 opacity-20"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 20%, rgba(255,255,255,0.8) 80%, transparent 100%)'
+                      }}
+                    />
+                    {/* Glass edge highlight - left */}
+                    <div 
+                      className="absolute top-0 left-0 bottom-0 w-[2px] pointer-events-none z-40 opacity-15"
+                      style={{
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 50%, transparent 100%)'
+                      }}
+                    />
+                    {/* Glass texture overlay */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-40 opacity-[0.025]"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
+                      }}
+                    />
+                    {/* Top-left corner highlight - enhanced */}
+                    <div 
+                      className="absolute top-0 left-0 w-2/5 h-1/3 pointer-events-none z-40 opacity-[0.1]"
+                      style={{
+                        background: 'radial-gradient(ellipse at top left, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 30%, transparent 70%)'
+                      }}
+                    />
+                    {/* Bottom-right subtle reflection */}
+                    <div 
+                      className="absolute bottom-0 right-0 w-1/4 h-1/5 pointer-events-none z-40 opacity-[0.04]"
+                      style={{
+                        background: 'radial-gradient(ellipse at bottom right, rgba(255,255,255,0.6) 0%, transparent 70%)'
+                      }}
+                    />
+                  </>
+                )}
+                
+                {/* Glitch effect overlay for special locations */}
+                {city.isSpecial && city.specialWeather === 'Glitch' && (
+                  <div className="absolute inset-0 pointer-events-none z-45 glitch-overlay" />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Signal interference effect for special locations */}
+          {city.isSpecial && (
+            <div 
+              className="absolute inset-0 pointer-events-none z-35 opacity-30"
+              style={{
+                backgroundImage: `repeating-linear-gradient(
+                  0deg,
+                  transparent,
+                  transparent 2px,
+                  rgba(0, 255, 255, 0.03) 2px,
+                  rgba(0, 255, 255, 0.03) 4px
+                )`,
+                animation: 'scanlines 8s linear infinite'
+              }}
+            />
+          )}
+
+          {/* UI Overlay - Enlarged elements for better readability */}
+          <div className={`absolute inset-x-0 flex justify-between items-start z-50 pointer-events-none ${isExpanded ? 'top-10 px-12' : 'top-5 px-5'}`}>
+            <div className="flex flex-col">
+              {/* Time Display - Significantly Larger */}
+              {(() => {
+                const specialTime = city.isSpecial ? getSpecialTimeDisplay(city.id, weather.localTime) : null;
+                if (specialTime && specialTime.text) {
+                  return (
+                    <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${specialTime.className} ${isExpanded ? 'text-4xl' : 'text-xl font-medium'}`}>
+                      {specialTime.text}
+                    </span>
+                  );
+                }
+                return (
+                  <span className={`font-mono tabular-nums tracking-tighter drop-shadow-md ${city.isSpecial ? 'text-cyan-400' : 'text-white/95'} ${isExpanded ? 'text-4xl' : 'text-xl font-medium'}`}>
+                    {formatTime(weather.localTime)}
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="flex flex-col items-end">
+               <div className="flex items-center gap-2">
+                  {/* Temperature Display - with special neon colors */}
+                  <span className={`font-mono drop-shadow-md ${getSpecialTempColor(weather.temp, city.isSpecial)} ${isExpanded ? 'text-4xl' : 'text-2xl font-light'}`}>
+                    {city.isSpecial && weather.temp === 404 ? 'ERR' : weather.temp}°
+                  </span>
+                  {/* Weather Icon - Larger (hide for special locations) */}
+                  {!city.isSpecial && <Icon size={isExpanded ? 24 : 20} className="text-white/90 drop-shadow-md" />}
+               </div>
+               {/* Sound Mute Button - only show in expanded mode */}
+               {isExpanded && (
+                 <button
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     toggleMute();
+                   }}
+                   className="mt-3 p-2 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all pointer-events-auto"
+                   title={isMuted ? '开启声音' : '静音'}
+                 >
+                   {isMuted ? (
+                     <VolumeX size={20} className="text-white/60" />
+                   ) : (
+                     <Volume2 size={20} className="text-white/80" />
+                   )}
+                 </button>
+               )}
+            </div>
+          </div>
+
+          <div className={`absolute inset-x-0 bottom-0 z-50 pointer-events-none
+            ${isExpanded ? 'p-20' : 'p-6 pb-7'}
+          `}>
+            <div className="flex flex-col items-center text-center">
+              {/* Nickname - Larger */}
+              <span className={`tracking-[0.3em] uppercase mb-1 font-medium drop-shadow-md ${city.isSpecial ? 'text-cyan-400/80' : 'text-white/70'} ${isExpanded ? 'text-sm' : 'text-[10px]'}`}>
+                {frame.nickname}
+              </span>
+              
+              {!isExpanded && (
+                <>
+                  <h2 className={`font-serif-sc tracking-widest shadow-black drop-shadow-lg text-3xl ${city.isSpecial ? 'text-cyan-300' : 'text-white'}`}>
+                    {city.name_cn}
+                  </h2>
+                  {/* English Name Added */}
+                  <h3 className={`text-[10px] tracking-[0.2em] font-sans uppercase mt-1 drop-shadow-md ${city.isSpecial ? 'text-cyan-400/60' : 'text-white/50'}`}>
+                    {city.name_en}
+                  </h3>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* CSS for glitch animation */}
+      <style>{`
+        @keyframes scanlines {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(4px); }
+        }
+        
+        .glitch-overlay {
+          background: linear-gradient(
+            transparent 0%,
+            rgba(255, 0, 255, 0.05) 50%,
+            transparent 100%
+          );
+          animation: glitch 0.3s infinite;
+        }
+        
+        @keyframes glitch {
+          0% { transform: translateX(0); opacity: 0.3; }
+          20% { transform: translateX(-2px); opacity: 0.5; }
+          40% { transform: translateX(2px); opacity: 0.3; }
+          60% { transform: translateX(-1px); opacity: 0.4; }
+          80% { transform: translateX(1px); opacity: 0.3; }
+          100% { transform: translateX(0); opacity: 0.3; }
+        }
+      `}</style>
+    </motion.div>
+  );
+};
+
+export default Frame;
