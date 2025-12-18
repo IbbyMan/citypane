@@ -129,7 +129,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
           </div>
         </header>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-12 lg:gap-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-12 sm:gap-20">
           {frames.map(frame => (
             <div key={frame.uuid} className="relative flex justify-center w-full aspect-[4/5] perspective-1000 group/card">
               <div className="relative w-full h-full z-0">
@@ -202,10 +202,10 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                 <X size={32} strokeWidth={1} />
               </button>
 
-              <div className="w-full h-full flex flex-row gap-4 sm:gap-8 lg:gap-20 items-center justify-center px-2 sm:px-4 md:px-12 py-4 sm:py-8">
+              <div className="w-full h-full flex flex-col md:flex-row gap-8 lg:gap-20 items-center justify-center px-4 md:px-12 py-8">
                 {/* Image Area - Portrait aspect ratio with wooden frame */}
                 <motion.div 
-                  className="relative h-[60vh] sm:h-[75vh] md:h-[85vh] aspect-[4/5] max-w-[45vw] sm:max-w-lg"
+                  className="relative h-[50vh] md:h-[70vh] aspect-[4/5] max-w-sm md:max-w-md"
                   initial={{ scale: 0.95, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.95, opacity: 0 }}
@@ -262,49 +262,49 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="w-[45vw] sm:w-full md:w-80 lg:w-[28rem] text-white space-y-4 sm:space-y-10 overflow-y-auto max-h-[60vh] sm:max-h-[75vh] md:max-h-full custom-scrollbar pr-1 sm:pr-2 md:pt-24"
+                  className="w-full md:w-80 lg:w-[28rem] text-white space-y-10 overflow-y-auto max-h-[30vh] md:max-h-full custom-scrollbar pr-2 md:pt-24"
                 >
-                  <div className="space-y-4 sm:space-y-8">
+                  <div className="space-y-8">
                     <header>
-                      <div className="w-8 sm:w-12 h-[2px] bg-indigo-400/50 mb-4 sm:mb-8" />
-                      <div className="flex items-center gap-1 sm:gap-2 text-indigo-200/60 mb-2 sm:mb-4">
-                         <MapPin size={10} className="sm:w-3 sm:h-3" />
-                         <p className="text-[8px] sm:text-xs tracking-[0.2em] sm:tracking-[0.4em] uppercase font-medium">Location</p>
+                      <div className="w-12 h-[2px] bg-indigo-400/50 mb-8" />
+                      <div className="flex items-center gap-2 text-indigo-200/60 mb-4">
+                         <MapPin size={12} />
+                         <p className="text-xs tracking-[0.4em] uppercase font-medium">Connected Location</p>
                       </div>
                       
-                      <h2 className="text-2xl sm:text-5xl lg:text-7xl font-serif-sc mb-2 sm:mb-6 tracking-tight text-white leading-tight drop-shadow-lg">
+                      <h2 className="text-5xl lg:text-7xl font-serif-sc mb-6 tracking-tight text-white leading-tight drop-shadow-lg">
                         {CITIES_DB.find(c => c.id === selectedFrame.cityId)?.name_cn}
                       </h2>
-                      <p className="text-xs sm:text-lg font-light text-slate-300 font-serif-sc leading-relaxed border-l-2 border-white/10 pl-3 sm:pl-6 italic hidden sm:block">
+                      <p className="text-lg font-light text-slate-300 font-serif-sc leading-relaxed border-l-2 border-white/10 pl-6 italic">
                         {CITIES_DB.find(c => c.id === selectedFrame.cityId)?.quote || "万里的距离在此刻浓缩为一窗灯火。"}
                       </p>
                     </header>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-                      <div className="bg-slate-800/40 backdrop-blur-md p-3 sm:p-6 rounded-xl sm:rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
-                        <p className="text-[8px] sm:text-xs uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 font-medium">Temp</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-800/40 backdrop-blur-md p-6 rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
+                        <p className="text-xs uppercase tracking-widest text-slate-400 mb-2 font-medium">Temperature</p>
                         {selectedWeather ? (
-                          <p className="text-xl sm:text-4xl font-light tracking-tighter text-white">
+                          <p className="text-4xl font-light tracking-tighter text-white">
                             {selectedWeather.temp}°
                           </p>
                         ) : (
-                          <div className="w-4 h-4 sm:w-6 sm:h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                         )}
                       </div>
-                      <div className="bg-slate-800/40 backdrop-blur-md p-3 sm:p-6 rounded-xl sm:rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
-                        <p className="text-[8px] sm:text-xs uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 font-medium">Weather</p>
+                      <div className="bg-slate-800/40 backdrop-blur-md p-6 rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
+                        <p className="text-xs uppercase tracking-widest text-slate-400 mb-2 font-medium">Condition</p>
                         {selectedWeather ? (
-                          <p className="text-sm sm:text-xl font-light tracking-wide text-white">
+                          <p className="text-xl font-light tracking-wide text-white">
                             {selectedWeather.weatherCode}
                           </p>
                         ) : (
-                          <div className="w-4 h-4 sm:w-6 sm:h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                          <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                         )}
                       </div>
                     </div>
 
-                    {/* Pet decoration - hidden on small mobile */}
-                    <div className="hidden sm:flex justify-start mt-4">
+                    {/* Pet decoration */}
+                    <div className="flex justify-start mt-4">
                       <img
                         src="/pet-gif/pet-2.gif"
                         alt="window pet"
