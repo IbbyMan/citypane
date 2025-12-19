@@ -83,8 +83,11 @@ export const formatTime = (date: Date) => {
 };
 
 export const getTimeOfDay = (hour: number) => {
-  if (hour >= 5 && hour < 10) return 'Morning';
-  if (hour >= 10 && hour < 16) return 'Noon';
-  if (hour >= 16 && hour < 20) return 'Sunset';
-  return 'Night';
+  if (hour >= 5 && hour < 7) return 'Dawn';      // 5:00-6:59 黎明
+  if (hour >= 7 && hour < 10) return 'Morning';  // 7:00-9:59 早晨
+  if (hour >= 10 && hour < 14) return 'Noon';    // 10:00-13:59 正午
+  if (hour >= 14 && hour < 17) return 'Afternoon'; // 14:00-16:59 下午
+  if (hour >= 17 && hour < 19) return 'Dusk';    // 17:00-18:59 黄昏
+  if (hour >= 19 && hour < 21) return 'Evening'; // 19:00-20:59 傍晚
+  return 'Night'; // 21:00-4:59 夜晚
 };

@@ -400,19 +400,20 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       }
 
       // Build time-specific lighting (for normal locations)
+      // CRITICAL: Explicitly state time of day and what should NOT appear
       const timeLighting = timeOfDay === 'Dawn' 
-        ? 'golden pink sunrise, early morning glow'
+        ? 'early dawn at 5-7am, golden pink sunrise on horizon, first light of day, NO moon, NO stars, soft morning glow'
         : timeOfDay === 'Morning'
-        ? 'bright morning sunlight, clear blue sky'
+        ? 'bright morning at 7-10am, clear daytime sky, morning sunlight, NO moon, NO stars, NO night elements'
         : timeOfDay === 'Noon'
-        ? 'harsh midday sun, strong shadows'
+        ? 'midday at 10am-2pm, bright sunny daytime, sun high in sky, harsh daylight, strong shadows, NO moon, NO stars, NO night elements'
         : timeOfDay === 'Afternoon'
-        ? 'warm golden afternoon light, long shadows'
+        ? 'afternoon at 2-5pm, warm golden afternoon sunlight, daytime scene, long shadows, NO moon, NO stars, NO night elements'
         : timeOfDay === 'Dusk'
-        ? 'dramatic orange purple sunset, city lights turning on'
+        ? 'sunset dusk at 5-7pm, dramatic orange purple sunset sky, sun setting on horizon, city lights beginning to turn on, NO moon yet, NO stars yet'
         : timeOfDay === 'Evening'
-        ? 'blue hour twilight, city lights glowing'
-        : 'night scene, glowing neon signs, starry sky, warm window lights';
+        ? 'evening twilight at 7-9pm, blue hour after sunset, deep blue sky, city lights glowing, crescent moon may appear, first stars visible'
+        : 'late night at 9pm-5am, dark night sky, bright moon visible, starry sky with many stars, glowing neon signs, warm window lights, nighttime atmosphere';
 
       // Build season hint
       const seasonHint = season === 'Spring'
@@ -435,7 +436,15 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       const auroraPrompt = hasAurora ? `, ${getAuroraPrompt(city.geo.lat)}` : '';
 
       // Optimized prompt for pixel art - emphasize retro game style
-      const prompt = `pixel art, 16-bit retro game screenshot, ${city.name_en} city view through window, ${city.visual_prompt}, ${timeLighting}, ${seasonHint}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background`.trim();
+      // Add explicit time enforcement at the end to prevent AI from adding wrong celestial objects
+      const isDaytime = ['Dawn', 'Morning', 'Noon', 'Afternoon'].includes(timeOfDay);
+      const timeEnforcement = isDaytime 
+        ? 'IMPORTANT: This is DAYTIME, absolutely NO moon, NO stars, NO night sky' 
+        : timeOfDay === 'Dusk' 
+        ? 'IMPORTANT: This is SUNSET time, NO moon, NO stars visible yet'
+        : 'IMPORTANT: This is NIGHTTIME, moon and stars should be visible in sky';
+      
+      const prompt = `pixel art, 16-bit retro game screenshot, ${city.name_en} city view through window, ${city.visual_prompt}, ${timeLighting}, ${seasonHint}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background, ${timeEnforcement}`.trim();
 
       // Use Pollinations.ai proxy with authentication
       const imageUrl = await generateImageViaProxy(prompt, 512, 768, 'flux');
