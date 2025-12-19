@@ -1,6 +1,9 @@
 // Netlify Serverless Function - Pollinations API Proxy
 // This function securely proxies requests to Pollinations API with server-side API key
 
+// Fallback models to try when flux is unavailable (in order of preference)
+const FALLBACK_MODELS = ['seedream', 'nanobanana', 'zimage'];
+
 // Helper function to call Pollinations API
 async function callPollinationsAPI(encodedPrompt, model, width, height, seedParam, apiKey) {
   const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${model}&width=${width}&height=${height}&seed=${seedParam}&nologo=true&private=true`;
@@ -22,16 +25,25 @@ function isNoActiveServersError(errorText) {
   return errorText.toLowerCase().includes('no active') && errorText.toLowerCase().includes('servers');
 }
 
+// Helper function to check if error is model not allowed (403)
+function isModelNotAllowedError(errorText) {
+  return errorText.toLowerCase().includes('not allowed');
+}
+
 // Helper function to check if error is token/quota related
 function isTokenExhaustedError(errorText) {
   const lowerText = errorText.toLowerCase();
   return lowerText.includes('quota') || 
-         lowerText.includes('limit') || 
          lowerText.includes('exceeded') ||
          lowerText.includes('insufficient') ||
          lowerText.includes('balance') ||
          lowerText.includes('pollen') ||
          lowerText.includes('credits');
+}
+
+// Helper function to check if error is retryable (should try next fallback model)
+function isRetryableError(errorText) {
+  return isNoActiveServersError(errorText) || isModelNotAllowedError(errorText);
 }
 
 exports.handler = async (event) => {
@@ -84,24 +96,17 @@ exports.handler = async (event) => {
     let response = await callPollinationsAPI(encodedPrompt, model, width, height, seedParam, apiKey);
     let usedModel = model;
     let fallbackUsed = false;
+    let triedModels = [model];
 
     console.log(`Pollinations response status for ${model}:`, response.status);
 
-    // If flux fails with "no active servers", fallback to turbo
+    // If primary model fails, try fallback models
     if (!response.ok && model === 'flux') {
-      const errorText = await response.text();
+      let errorText = await response.text();
       console.error(`Pollinations API error with flux: ${response.status}`, errorText);
       
-      // IMPORTANT: Check "no active servers" FIRST (more specific error)
-      // Then check token errors (to avoid false positives)
-      if (isNoActiveServersError(errorText)) {
-        console.log('Flux servers unavailable, falling back to turbo model...');
-        response = await callPollinationsAPI(encodedPrompt, 'turbo', width, height, seedParam, apiKey);
-        usedModel = 'turbo';
-        fallbackUsed = true;
-        console.log(`Pollinations response status for turbo:`, response.status);
-      } else if (isTokenExhaustedError(errorText)) {
-        // Check if it's a token/quota exhausted error
+      // Check if it's a token/quota exhausted error first
+      if (isTokenExhaustedError(errorText)) {
         return {
           statusCode: response.status,
           headers,
@@ -112,8 +117,70 @@ exports.handler = async (event) => {
             details: errorText,
           }),
         };
+      }
+      
+      // If it's a retryable error (no active servers or model not allowed), try fallbacks
+      if (isRetryableError(errorText)) {
+        for (const fallbackModel of FALLBACK_MODELS) {
+          console.log(`Trying fallback model: ${fallbackModel}...`);
+          triedModels.push(fallbackModel);
+          
+          response = await callPollinationsAPI(encodedPrompt, fallbackModel, width, height, seedParam, apiKey);
+          console.log(`Pollinations response status for ${fallbackModel}:`, response.status);
+          
+          if (response.ok) {
+            usedModel = fallbackModel;
+            fallbackUsed = true;
+            break;
+          }
+          
+          // Check error for this fallback
+          errorText = await response.text();
+          console.error(`Pollinations API error with ${fallbackModel}: ${response.status}`, errorText);
+          
+          // If token exhausted, stop trying
+          if (isTokenExhaustedError(errorText)) {
+            return {
+              statusCode: response.status,
+              headers,
+              body: JSON.stringify({ 
+                error: 'API 调用请求成功，但是 token 已用完，请联系 ibby 充值。',
+                errorCode: 'TOKEN_EXHAUSTED',
+                status: response.status,
+                details: errorText,
+              }),
+            };
+          }
+          
+          // If not retryable, stop trying fallbacks
+          if (!isRetryableError(errorText)) {
+            return {
+              statusCode: response.status,
+              headers,
+              body: JSON.stringify({ 
+                error: 'Failed to generate image',
+                status: response.status,
+                details: errorText,
+              }),
+            };
+          }
+        }
+        
+        // If we've tried all fallbacks and still failing
+        if (!response.ok) {
+          return {
+            statusCode: response.status,
+            headers,
+            body: JSON.stringify({ 
+              error: `所有生图模型（${triedModels.join('、')}）当前都不可用，请稍后再试。`,
+              errorCode: 'ALL_MODELS_UNAVAILABLE',
+              status: response.status,
+              triedModels: triedModels,
+            }),
+          };
+        }
       } else {
-        // Other error, return as is
+        // Non-retryable error, return as is
         return {
           statusCode: response.status,
           headers,
@@ -126,27 +193,11 @@ exports.handler = async (event) => {
       }
     }
 
-    // Check if fallback also failed
+    // Check if non-flux model failed
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Pollinations API error with ${usedModel}: ${response.status}`, errorText);
       
-      // IMPORTANT: Check "no active servers" FIRST
-      // If both flux and turbo failed with "no active servers"
-      if (fallbackUsed && isNoActiveServersError(errorText)) {
-        return {
-          statusCode: response.status,
-          headers,
-          body: JSON.stringify({ 
-            error: '两种生图模型（flux 和 turbo）当前在官方服务器都暂不可用，请稍后再试。',
-            errorCode: 'ALL_MODELS_UNAVAILABLE',
-            status: response.status,
-            details: errorText,
-          }),
-        };
-      }
-      
-      // Check if it's a token/quota exhausted error
       if (isTokenExhaustedError(errorText)) {
         return {
           statusCode: response.status,
