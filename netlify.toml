@@ -3,8 +3,8 @@
   publish = "dist"
 
 [build.environment]
-  # 禁用 sk_ 前缀的智能检测（Pollinations API key 使用此前缀）
-  SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES = "sk_"
+  # 禁用智能 secrets 检测（Pollinations API key 使用 sk_ 前缀）
+  SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
 
 [[headers]]
   for = "/bgm-sound/*"
