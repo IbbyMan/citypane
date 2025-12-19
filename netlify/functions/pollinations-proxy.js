@@ -35,61 +35,104 @@ exports.handler = async (event) => {
     }
 
     const apiKey = process.env.POLLINATIONS_API_KEY;
-    
-    // Build the Pollinations API URL
-    const encodedPrompt = encodeURIComponent(prompt);
+    if (!apiKey) {
+      console.error('POLLINATIONS_API_KEY environment variable is not set');
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Server configuration error: API key not set' }),
+      };
+    }
+
     const seedParam = seed || Math.floor(Math.random() * 1000000);
     
-    // Use referrer param for free tier, or nologo=true if we have API key
-    const noLogoParam = apiKey ? 'nologo=true' : '';
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&seed=${seedParam}${noLogoParam ? '&' + noLogoParam : ''}`;
+    // Use the official Pollinations API endpoint (POST)
+    const pollinationsUrl = 'https://enter.pollinations.ai/api/generate';
 
-    // Fetch the image from Pollinations API
-    const fetchHeaders = {};
-    if (apiKey) {
-      fetchHeaders['Authorization'] = `Bearer ${apiKey}`;
-    }
-    
     const response = await fetch(pollinationsUrl, {
-      method: 'GET',
-      headers: fetchHeaders,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        width: width,
+        height: height,
+        model: model,
+        seed: seedParam,
+      }),
     });
 
     if (!response.ok) {
-      console.error(`Pollinations API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`Pollinations API error: ${response.status} ${response.statusText}`, errorText);
       return {
         statusCode: response.status,
         headers,
         body: JSON.stringify({ 
           error: 'Failed to generate image',
           status: response.status,
+          details: errorText,
         }),
       };
     }
 
-    // Get the image as base64
-    const imageBuffer = await response.arrayBuffer();
-    const base64Image = Buffer.from(imageBuffer).toString('base64');
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
-
-    // Return the image as base64 data URL
-    return {
-      statusCode: 200,
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        imageUrl: `data:${contentType};base64,${base64Image}`,
-        seed: seedParam,
-      }),
-    };
+    const result = await response.json();
+    
+    // Check if the API returns an image URL or base64 directly
+    if (result.image_url) {
+      // Fetch the image and convert to base64
+      const imageResponse = await fetch(result.image_url);
+      if (!imageResponse.ok) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ error: 'Failed to fetch generated image' }),
+        };
+      }
+      const imageBuffer = await imageResponse.arrayBuffer();
+      const base64Image = Buffer.from(imageBuffer).toString('base64');
+      const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+      
+      return {
+        statusCode: 200,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: `data:${contentType};base64,${base64Image}`,
+          seed: seedParam,
+        }),
+      };
+    } else if (result.image) {
+      // API returns base64 directly
+      return {
+        statusCode: 200,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: result.image.startsWith('data:') ? result.image : `data:image/jpeg;base64,${result.image}`,
+          seed: seedParam,
+        }),
+      };
+    } else {
+      console.error('Unexpected API response format:', result);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Unexpected API response format', result }),
+      };
+    }
   } catch (error) {
     console.error('Proxy error:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ error: 'Internal server error', message: error.message }),
     };
   }
 };
