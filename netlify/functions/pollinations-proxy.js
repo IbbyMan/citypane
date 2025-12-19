@@ -45,24 +45,21 @@ exports.handler = async (event) => {
     }
 
     const seedParam = seed || Math.floor(Math.random() * 1000000);
+    const encodedPrompt = encodeURIComponent(prompt);
     
-    // Use the official Pollinations API endpoint (POST)
-    const pollinationsUrl = 'https://enter.pollinations.ai/api/generate';
+    // Use image.pollinations.ai with GET request
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&seed=${seedParam}&nologo=true`;
+
+    console.log('Fetching from Pollinations:', pollinationsUrl.substring(0, 100) + '...');
 
     const response = await fetch(pollinationsUrl, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        prompt: prompt,
-        width: width,
-        height: height,
-        model: model,
-        seed: seedParam,
-      }),
     });
+
+    console.log('Pollinations response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -78,55 +75,22 @@ exports.handler = async (event) => {
       };
     }
 
-    const result = await response.json();
-    
-    // Check if the API returns an image URL or base64 directly
-    if (result.image_url) {
-      // Fetch the image and convert to base64
-      const imageResponse = await fetch(result.image_url);
-      if (!imageResponse.ok) {
-        return {
-          statusCode: 500,
-          headers,
-          body: JSON.stringify({ error: 'Failed to fetch generated image' }),
-        };
-      }
-      const imageBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(imageBuffer).toString('base64');
-      const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
-      
-      return {
-        statusCode: 200,
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageUrl: `data:${contentType};base64,${base64Image}`,
-          seed: seedParam,
-        }),
-      };
-    } else if (result.image) {
-      // API returns base64 directly
-      return {
-        statusCode: 200,
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageUrl: result.image.startsWith('data:') ? result.image : `data:image/jpeg;base64,${result.image}`,
-          seed: seedParam,
-        }),
-      };
-    } else {
-      console.error('Unexpected API response format:', result);
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Unexpected API response format', result }),
-      };
-    }
+    // Get the image as base64
+    const imageBuffer = await response.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+
+    return {
+      statusCode: 200,
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        imageUrl: `data:${contentType};base64,${base64Image}`,
+        seed: seedParam,
+      }),
+    };
   } catch (error) {
     console.error('Proxy error:', error);
     return {
