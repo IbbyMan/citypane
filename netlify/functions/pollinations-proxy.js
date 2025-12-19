@@ -35,26 +35,24 @@ exports.handler = async (event) => {
     }
 
     const apiKey = process.env.POLLINATIONS_API_KEY;
-    if (!apiKey) {
-      console.error('POLLINATIONS_API_KEY environment variable is not set');
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'Server configuration error' }),
-      };
-    }
-
+    
     // Build the Pollinations API URL
     const encodedPrompt = encodeURIComponent(prompt);
     const seedParam = seed || Math.floor(Math.random() * 1000000);
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seedParam}`;
+    
+    // Use referrer param for free tier, or nologo=true if we have API key
+    const noLogoParam = apiKey ? 'nologo=true' : '';
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&seed=${seedParam}${noLogoParam ? '&' + noLogoParam : ''}`;
 
-    // Fetch the image from Pollinations API with Authorization header
+    // Fetch the image from Pollinations API
+    const fetchHeaders = {};
+    if (apiKey) {
+      fetchHeaders['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
     const response = await fetch(pollinationsUrl, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
+      headers: fetchHeaders,
     });
 
     if (!response.ok) {
