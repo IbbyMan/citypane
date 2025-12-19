@@ -60,8 +60,8 @@ const pixelateImage = (
   return finalCanvas.toDataURL('image/png');
 };
 
-// Pollinations API Key (前端直接调用)
-const POLLINATIONS_API_KEY = 'sk_FJblTy5mhCyMONykg07vxErUL3uwyUm8';
+// Pollinations API Key (从环境变量读取)
+const POLLINATIONS_API_KEY = import.meta.env.VITE_POLLINATIONS_API_KEY || '';
 
 // localStorage 缓存配置
 const CACHE_KEY_PREFIX = 'citypane_img_';
