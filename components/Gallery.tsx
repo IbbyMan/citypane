@@ -101,7 +101,12 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
 
   const handleRandomize = () => {
     setNewNickname(generateVibeName());
-    const randomCity = CITIES_DB[Math.floor(Math.random() * CITIES_DB.length)];
+    // 区分中国城市和非中国城市，增加非中国城市的出现概率
+    const chinaCities = CITIES_DB.filter(c => /^\d{3}$/.test(c.series_num));
+    const internationalCities = CITIES_DB.filter(c => !/^\d{3}$/.test(c.series_num));
+    // 60%概率选择非中国城市，40%概率选择中国城市
+    const pool = Math.random() < 0.6 ? internationalCities : chinaCities;
+    const randomCity = pool[Math.floor(Math.random() * pool.length)];
     setNewCityId(randomCity.id);
     setCitySearchTerm(randomCity.name_cn);
   };
@@ -111,7 +116,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
       
       {/* Background Weather Effect (Unified) */}
       <div className="absolute inset-0 opacity-40 pointer-events-none">
-        <WeatherCanvas type={weatherType} />
+        <WeatherCanvas type={weatherType} speedMultiplier={weatherType === 'Snow' ? 0.4 : 1.0} />
       </div>
 
       {/* Christmas Decorations */}
@@ -198,11 +203,14 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
       {/* Expanded Modal */}
       <AnimatePresence>
         {selectedFrame && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-hidden">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+          <motion.div 
+            className="fixed inset-0 z-[110] flex items-center justify-center overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div 
               onClick={() => setSelectedFrame(null)}
               className="absolute inset-0 bg-black/90 backdrop-blur-3xl"
             />
@@ -219,10 +227,10 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                 {/* Image Area - Portrait aspect ratio with wooden frame */}
                 <motion.div 
                   className="relative h-[50vh] md:h-[70vh] aspect-[4/5] max-w-sm md:max-w-md"
-                  initial={{ scale: 0.95, opacity: 0 }}
+                  initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
                 >
                    {/* Outer wooden frame - deep ebony */}
                    <div 
@@ -264,7 +272,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                      }}
                    />
                    {/* Content container */}
-                   <div className="relative w-full h-full rounded-sm overflow-hidden">
+                   <div className="relative w-full h-full rounded-sm overflow-hidden bg-[#1e2330]">
                     <Frame frame={selectedFrame} isExpanded firstCityName={frames[0] ? CITIES_DB.find(c => c.id === frames[0].cityId)?.name_cn : undefined} />
                    </div>
                 </motion.div>
@@ -274,7 +282,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  transition={{ delay: 0.1, duration: 0.4 }}
+                  transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
                   className="w-full md:w-80 lg:w-[28rem] text-white space-y-10 overflow-y-auto max-h-[30vh] md:max-h-full custom-scrollbar pr-2 md:pt-24"
                 >
                   <div className="space-y-8">
@@ -370,7 +378,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                 </motion.div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

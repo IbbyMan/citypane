@@ -159,20 +159,66 @@ const getSpecialTimeDisplay = (cityId: string, time: Date): { text: string; clas
 };
 
 // Helper: Calculate season based on month and hemisphere (lat)
-const getSeason = (lat: number, date: Date): string => {
+// Returns detailed season info for accurate prompt generation
+const getSeason = (lat: number, date: Date): { name: string; month: number; hemisphere: string } => {
   const month = date.getMonth(); // 0-11
   const isNorth = lat >= 0;
+  const hemisphere = isNorth ? 'Northern' : 'Southern';
   
   if (isNorth) {
-    if (month === 11 || month === 0 || month === 1) return 'Winter';
-    if (month >= 2 && month <= 4) return 'Spring';
-    if (month >= 5 && month <= 7) return 'Summer';
-    return 'Autumn';
+    if (month === 11 || month === 0 || month === 1) return { name: 'Winter', month, hemisphere };
+    if (month >= 2 && month <= 4) return { name: 'Spring', month, hemisphere };
+    if (month >= 5 && month <= 7) return { name: 'Summer', month, hemisphere };
+    return { name: 'Autumn', month, hemisphere };
   } else {
-    if (month === 11 || month === 0 || month === 1) return 'Summer';
-    if (month >= 2 && month <= 4) return 'Autumn';
-    if (month >= 5 && month <= 7) return 'Winter';
-    return 'Spring';
+    if (month === 11 || month === 0 || month === 1) return { name: 'Summer', month, hemisphere };
+    if (month >= 2 && month <= 4) return { name: 'Autumn', month, hemisphere };
+    if (month >= 5 && month <= 7) return { name: 'Winter', month, hemisphere };
+    return { name: 'Spring', month, hemisphere };
+  }
+};
+
+// Helper: Get detailed season description based on month and hemisphere
+const getDetailedSeasonPrompt = (season: { name: string; month: number; hemisphere: string }): string => {
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[season.month];
+  
+  switch (season.name) {
+    case 'Spring':
+      if (season.month === 2 || season.month === 8) { // March or September (early spring)
+        return `early spring in ${monthName}, ${season.hemisphere} hemisphere, fresh new leaves budding on trees, cherry blossoms and magnolia flowers blooming, soft pastel colors, gentle spring breeze, clear fresh air after winter`;
+      } else if (season.month === 4 || season.month === 10) { // May or November (late spring)
+        return `late spring in ${monthName}, ${season.hemisphere} hemisphere, lush green foliage, colorful flowers in full bloom, warm pleasant weather, vibrant nature, birds singing`;
+      }
+      return `mid-spring in ${monthName}, ${season.hemisphere} hemisphere, beautiful cherry blossoms sakura, fresh green leaves, spring flowers blooming everywhere, mild warm weather, renewal of nature`;
+    
+    case 'Summer':
+      if (season.month === 5 || season.month === 11) { // June or December (early summer)
+        return `early summer in ${monthName}, ${season.hemisphere} hemisphere, bright sunny days, deep green lush trees, warm golden sunlight, clear blue skies, summer beginning`;
+      } else if (season.month === 7 || season.month === 1) { // August or February (late summer)
+        return `late summer in ${monthName}, ${season.hemisphere} hemisphere, intense heat, cicadas singing, deep shadows, some leaves starting to dry, end of summer atmosphere`;
+      }
+      return `mid-summer in ${monthName}, ${season.hemisphere} hemisphere, hot sunny weather, vibrant green vegetation, intense sunlight, deep blue sky, peak of summer`;
+    
+    case 'Autumn':
+      if (season.month === 8 || season.month === 2) { // September or March (early autumn)
+        return `early autumn in ${monthName}, ${season.hemisphere} hemisphere, leaves beginning to change color, first hints of golden and orange, cool crisp air, harvest season beginning`;
+      } else if (season.month === 10 || season.month === 4) { // November or May (late autumn)
+        return `late autumn in ${monthName}, ${season.hemisphere} hemisphere, most leaves fallen, bare branches visible, cold wind, grey overcast skies, approaching winter`;
+      }
+      return `mid-autumn in ${monthName}, ${season.hemisphere} hemisphere, beautiful golden red orange maple leaves, peak fall foliage, warm amber tones, cool pleasant weather, romantic autumn atmosphere`;
+    
+    case 'Winter':
+      if (season.month === 11 || season.month === 5) { // December or June (early winter)
+        return `early winter in ${monthName}, ${season.hemisphere} hemisphere, first snow possible, bare trees, cold crisp air, holiday season atmosphere, cozy warm lights`;
+      } else if (season.month === 1 || season.month === 7) { // February or August (late winter)
+        return `late winter in ${monthName}, ${season.hemisphere} hemisphere, deep cold, snow on ground, bare branches, hints of spring approaching, end of winter`;
+      }
+      return `mid-winter in ${monthName}, ${season.hemisphere} hemisphere, cold snowy weather, bare trees covered in frost, white snow blanket, cozy warm interior lights, winter wonderland`;
+    
+    default:
+      return '';
   }
 };
 
@@ -217,16 +263,16 @@ const getAuroraPrompt = (lat: number): string => {
   }
 };
 
-// Helper: Get descriptive weather prompt
+// Helper: Get descriptive weather prompt with richer visual details
 const getWeatherDescription = (code: WeatherType): string => {
   switch (code) {
-    case 'Clear': return "Clear blue sky, sunny, bright sunlight, sharp shadows, vibrant colors";
-    case 'LightRain': return "Light rain drizzle, wet ground reflections, overcast grey sky, people with umbrellas, cinematic wet street look";
-    case 'HeavyRain': return "Heavy torrential downpour, storm, puddles on ground, dark dramatic clouds, moody atmosphere";
-    case 'Snow': return "Snowing, white snow covering ground and rooftops, winter cold atmosphere, soft white lighting";
-    case 'Fog': return "Foggy, misty, low visibility, ethereal dreamy atmosphere, soft diffused light";
-    case 'Windy': return "Windy, swaying trees, dynamic motion in air, leaves blowing in wind";
-    default: return "Clear sky";
+    case 'Clear': return "crystal clear sky, brilliant sunshine, warm golden light casting long shadows, vibrant saturated colors, beautiful weather";
+    case 'LightRain': return "gentle rain drizzle, wet glistening streets with beautiful reflections, soft grey overcast sky, romantic rainy atmosphere, umbrellas dotting the scene";
+    case 'HeavyRain': return "dramatic heavy rainfall, stormy weather, deep puddles reflecting city lights, dark moody clouds, cinematic rain atmosphere, water streaming down";
+    case 'Snow': return "magical snowfall, pristine white snow covering rooftops and streets, soft diffused winter light, peaceful snowy atmosphere, frost on windows";
+    case 'Fog': return "mysterious fog rolling through, ethereal misty atmosphere, soft diffused lighting, dreamlike visibility, romantic hazy scene";
+    case 'Windy': return "dynamic windy weather, trees swaying gracefully, leaves dancing in the air, movement and energy in the scene";
+    default: return "pleasant weather";
   }
 };
 
@@ -363,7 +409,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
     
     // Check aurora condition for cache key (not applicable for special locations)
     const hasAuroraForCache = !city.isSpecial && weather ? shouldShowAurora(city.geo.lat, weather.localTime) : false;
-    const cacheKey = `pixel_art_v13_${city.id}_${timeOfDay}_${weatherCode}_${season}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
+    const cacheKey = `pixel_art_v14_${city.id}_${timeOfDay}_${weatherCode}_${season.name}_${season.month}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
 
     // Check cache first
     try {
@@ -382,7 +428,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       // For special locations, use a completely different prompt structure
       if (city.isSpecial && city.specialWeather) {
         const specialWeatherDesc = getSpecialWeatherDescription(city.specialWeather);
-        const specialPrompt = `pixel art, 16-bit retro game screenshot, ${city.visual_prompt}, ${specialWeatherDesc}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background, sci-fi retro aesthetic`.trim();
+        const specialPrompt = `beautiful digital painting, ${city.visual_prompt}, ${specialWeatherDesc}, atmospheric perspective, cinematic composition, rich details, sci-fi aesthetic, mysterious otherworldly atmosphere, dramatic lighting`.trim();
         
         // Use proxy API with authentication
         const generatedImageUrl = await generateImageViaProxy(specialPrompt, 512, 768, 'flux');
@@ -401,58 +447,45 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       }
 
       // Build time-specific lighting (for normal locations)
-      // CRITICAL: Explicitly state time of day and what should NOT appear
+      // Rich atmospheric descriptions for beautiful imagery
       const timeLighting = timeOfDay === 'Dawn' 
-        ? 'early dawn at 5-7am, golden pink sunrise on horizon, first light of day, NO moon, NO stars, soft morning glow'
+        ? 'magical golden hour dawn, soft pink and orange sunrise painting the sky, first rays of sunlight, warm golden glow on buildings, peaceful morning awakening'
         : timeOfDay === 'Morning'
-        ? 'bright morning at 7-10am, clear daytime sky, morning sunlight, NO moon, NO stars, NO night elements'
+        ? 'bright cheerful morning, crystal clear blue sky, fresh morning sunlight streaming through, long soft shadows, energetic start of day'
         : timeOfDay === 'Noon'
-        ? 'midday at 10am-2pm, bright sunny daytime, sun high in sky, harsh daylight, strong shadows, NO moon, NO stars, NO night elements'
+        ? 'brilliant midday sun, vibrant colors under direct sunlight, strong contrast and deep shadows, clear visibility, peak daylight'
         : timeOfDay === 'Afternoon'
-        ? 'afternoon at 2-5pm, warm golden afternoon sunlight, daytime scene, long shadows, NO moon, NO stars, NO night elements'
+        ? 'warm golden afternoon light, rich amber tones, beautiful long shadows stretching across the scene, relaxed afternoon atmosphere'
         : timeOfDay === 'Dusk'
-        ? 'sunset dusk at 5-7pm, dramatic orange purple sunset sky, sun setting on horizon, city lights beginning to turn on, NO moon yet, NO stars yet'
+        ? 'breathtaking sunset, dramatic orange purple pink sky, sun setting on horizon painting everything in warm colors, city lights beginning to twinkle, magical twilight moment'
         : timeOfDay === 'Evening'
-        ? 'evening twilight at 7-9pm, blue hour after sunset, deep blue sky, city lights glowing, crescent moon may appear, first stars visible'
-        : 'late night at 9pm-5am, dark night sky, bright moon visible, starry sky with many stars, glowing neon signs, warm window lights, nighttime atmosphere';
+        ? 'romantic blue hour, deep indigo sky after sunset, city lights glowing warmly, first stars appearing, peaceful evening atmosphere'
+        : 'enchanting night scene, starry sky with bright moon, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
 
-      // Build season hint
-      const seasonHint = season === 'Spring'
-        ? 'spring cherry blossoms, fresh green'
-        : season === 'Summer'
-        ? 'summer lush greenery, vibrant colors'
-        : season === 'Autumn'
-        ? 'autumn golden red leaves, warm amber tones'
-        : 'winter bare trees, cold blue tones';
+      // Get detailed season description
+      const seasonPrompt = getDetailedSeasonPrompt(season);
 
       // Build weather effect for window
       const weatherWindow = weatherCode === 'LightRain' || weatherCode === 'HeavyRain' 
-        ? 'raindrops on window glass, wet reflections' 
+        ? 'raindrops on window glass creating beautiful patterns, wet reflections on streets' 
         : weatherCode === 'Snow' 
-        ? 'frost on window edges, snow falling'
+        ? 'delicate frost crystals on window edges, gentle snowflakes falling'
         : '';
 
       // Check for aurora conditions (high latitude + winter + night)
       const hasAurora = shouldShowAurora(city.geo.lat, weather!.localTime);
       const auroraPrompt = hasAurora ? `, ${getAuroraPrompt(city.geo.lat)}` : '';
 
-      // Optimized prompt for pixel art - emphasize retro game style
-      // Add explicit time enforcement at the end to prevent AI from adding wrong celestial objects
-      const isDaytime = ['Dawn', 'Morning', 'Noon', 'Afternoon'].includes(timeOfDay);
-      const timeEnforcement = isDaytime 
-        ? 'IMPORTANT: This is DAYTIME, absolutely NO moon, NO stars, NO night sky' 
-        : timeOfDay === 'Dusk' 
-        ? 'IMPORTANT: This is SUNSET time, NO moon, NO stars visible yet'
-        : 'IMPORTANT: This is NIGHTTIME, moon and stars should be visible in sky';
-      
-      const prompt = `pixel art, 16-bit retro game screenshot, ${city.name_en} city view through window, ${city.visual_prompt}, ${timeLighting}, ${seasonHint}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background, ${timeEnforcement}`.trim();
+      // Build the prompt - focus on beautiful imagery, let post-processing handle pixel effect
+      // Emphasize scenic beauty, atmospheric details, and accurate seasonal representation
+      const prompt = `beautiful digital painting, ${city.name_en} cityscape viewed through a window, ${city.visual_prompt}, ${timeLighting}, ${seasonPrompt}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, atmospheric perspective, rich environmental details, cinematic composition, masterful lighting, high quality artwork`.trim();
 
       // Use Pollinations.ai proxy with authentication
       const imageUrl = await generateImageViaProxy(prompt, 512, 768, 'flux');
 
       setImageUrl(imageUrl);
       
-      // Apply pixel post-processing
+      // Apply pixel post-processing - this handles the retro aesthetic
       processPixelArt(imageUrl);
       
       // Cache the URL
@@ -547,7 +580,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
             ) : (
               <motion.div 
                 key="art" 
-                initial={{ opacity: 0 }} 
+                initial={isExpanded ? { opacity: 1 } : { opacity: 0 }} 
                 animate={{ opacity: 1 }} 
                 className="absolute inset-0 w-full h-full"
               >

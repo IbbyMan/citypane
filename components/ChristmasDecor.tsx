@@ -121,10 +121,10 @@ const ChristmasDecor: React.FC<ChristmasDecorProps> = ({ enabled = true }) => {
     const initialTimer = setTimeout(() => {
       triggerSanta();
       
-      // 之后每 20-30 秒出现一次
+      // 之后每 45-60 秒出现一次
       interval = setInterval(() => {
         triggerSanta();
-      }, Math.random() * 10000 + 20000);
+      }, Math.random() * 15000 + 45000);
     }, initialDelay);
 
     return () => {
@@ -163,7 +163,7 @@ const ChristmasDecor: React.FC<ChristmasDecorProps> = ({ enabled = true }) => {
               src="/extra-docu/chrismas1.png" 
               alt="Santa" 
               className="h-24 w-auto object-contain"
-              style={{ imageRendering: 'auto' }}
+              style={{ imageRendering: 'auto', opacity: 0.6 }}
             />
           </motion.div>
         )}

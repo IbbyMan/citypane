@@ -5,7 +5,7 @@ import { STORAGE_KEYS, CITIES_DB } from './constants';
 import Onboarding from './components/Onboarding';
 import Gallery from './components/Gallery';
 
-const MAX_FRAMES = 18; // Maximum number of frames allowed
+const MAX_FRAMES = 12; // Maximum number of frames allowed
 
 const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<{ name: string; homeCityId: string } | null>(null);
