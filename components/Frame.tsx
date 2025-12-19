@@ -7,6 +7,7 @@ import { fetchRealWeather, formatTime, getTimeOfDay } from '../utils/weather';
 import { useAmbientSound } from '../utils/useAmbientSound';
 import TimeFilter from './TimeFilter';
 import WeatherCanvas from './WeatherCanvas';
+import ClearSkyEffect from './ClearSkyEffect';
 import { Moon, Sun, Sparkles, RefreshCw, WifiOff, Volume2, VolumeX } from 'lucide-react';
 
 // Pixelate image using Canvas - downsample then upscale with nearest-neighbor
@@ -114,7 +115,7 @@ const getLoadingMessage = (
     `正在捕获 ${cityName} 的季风...`,
     `我想看看 ${nickname} 的窗外...`,
     `正在将 ${cityName} 的 ${time || '此刻'} 凝固进画框...`,
-    `正在聆听 ${cityName} 此刻的 ${weather || '天气'} ...`,
+    `正在聆听此时此刻的 ${cityName} ...`,
   ];
   return messages[Math.floor(Math.random() * messages.length)];
 };
@@ -561,6 +562,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
                 
                 <TimeFilter hour={hour} />
                 <WeatherCanvas type={weather.weatherCode} isExpanded={isExpanded} />
+                <ClearSkyEffect hour={hour} weatherCode={weather.weatherCode} />
                 
                 {/* Overlay gradients for text readability */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70 pointer-events-none z-30 opacity-80" />

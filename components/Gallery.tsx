@@ -8,6 +8,7 @@ import Frame from './Frame';
 import { fetchRealWeather } from '../utils/weather';
 import { generateVibeName } from '../utils/nameGenerator';
 import WeatherCanvas from './WeatherCanvas';
+import ChristmasDecor from './ChristmasDecor';
 
 interface GalleryProps {
   frames: UserFrame[];
@@ -112,6 +113,9 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
       <div className="absolute inset-0 opacity-40 pointer-events-none">
         <WeatherCanvas type={weatherType} />
       </div>
+
+      {/* Christmas Decorations */}
+      <ChristmasDecor enabled={true} />
 
       {/* Subtle Gradient & Noise Texture */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#0f172a] opacity-80 -z-10" />
