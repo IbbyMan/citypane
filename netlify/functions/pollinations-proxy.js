@@ -47,13 +47,16 @@ exports.handler = async (event) => {
     const seedParam = seed || Math.floor(Math.random() * 1000000);
     const encodedPrompt = encodeURIComponent(prompt);
     
-    // Use image.pollinations.ai with GET request and key parameter (per official docs)
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&seed=${seedParam}&nologo=true&private=true&key=${apiKey}`;
+    // Use gen.pollinations.ai with correct path format (per official docs)
+    const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${model}&width=${width}&height=${height}&seed=${seedParam}&nologo=true&private=true`;
 
-    console.log('Fetching from Pollinations (URL length):', pollinationsUrl.length);
+    console.log('Fetching from Pollinations...');
 
     const response = await fetch(pollinationsUrl, {
       method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
     });
 
     console.log('Pollinations response status:', response.status);
