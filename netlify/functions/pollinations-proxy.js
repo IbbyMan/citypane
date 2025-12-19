@@ -1,6 +1,39 @@
 // Netlify Serverless Function - Pollinations API Proxy
 // This function securely proxies requests to Pollinations API with server-side API key
 
+// Helper function to call Pollinations API
+async function callPollinationsAPI(encodedPrompt, model, width, height, seedParam, apiKey) {
+  const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${model}&width=${width}&height=${height}&seed=${seedParam}&nologo=true&private=true`;
+  
+  console.log(`Fetching from Pollinations with model: ${model}...`);
+  
+  const response = await fetch(pollinationsUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+    },
+  });
+  
+  return response;
+}
+
+// Helper function to check if error is "no active servers"
+function isNoActiveServersError(errorText) {
+  return errorText.toLowerCase().includes('no active') && errorText.toLowerCase().includes('servers');
+}
+
+// Helper function to check if error is token/quota related
+function isTokenExhaustedError(errorText) {
+  const lowerText = errorText.toLowerCase();
+  return lowerText.includes('quota') || 
+         lowerText.includes('limit') || 
+         lowerText.includes('exceeded') ||
+         lowerText.includes('insufficient') ||
+         lowerText.includes('balance') ||
+         lowerText.includes('pollen') ||
+         lowerText.includes('credits');
+}
+
 exports.handler = async (event) => {
   // CORS headers
   const headers = {
@@ -47,23 +80,86 @@ exports.handler = async (event) => {
     const seedParam = seed || Math.floor(Math.random() * 1000000);
     const encodedPrompt = encodeURIComponent(prompt);
     
-    // Use gen.pollinations.ai with correct path format (per official docs)
-    const pollinationsUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${model}&width=${width}&height=${height}&seed=${seedParam}&nologo=true&private=true`;
+    // First try with the requested model (default: flux)
+    let response = await callPollinationsAPI(encodedPrompt, model, width, height, seedParam, apiKey);
+    let usedModel = model;
+    let fallbackUsed = false;
 
-    console.log('Fetching from Pollinations...');
+    console.log(`Pollinations response status for ${model}:`, response.status);
 
-    const response = await fetch(pollinationsUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-    });
+    // If flux fails with "no active servers", fallback to turbo
+    if (!response.ok && model === 'flux') {
+      const errorText = await response.text();
+      console.error(`Pollinations API error with flux: ${response.status}`, errorText);
+      
+      // Check if it's a token/quota exhausted error
+      if (isTokenExhaustedError(errorText)) {
+        return {
+          statusCode: response.status,
+          headers,
+          body: JSON.stringify({ 
+            error: 'API 调用请求成功，但是 token 已用完，请联系 ibby 充值。',
+            errorCode: 'TOKEN_EXHAUSTED',
+            status: response.status,
+            details: errorText,
+          }),
+        };
+      }
+      
+      // Check if it's "no active servers" error - try fallback to turbo
+      if (isNoActiveServersError(errorText)) {
+        console.log('Flux servers unavailable, falling back to turbo model...');
+        response = await callPollinationsAPI(encodedPrompt, 'turbo', width, height, seedParam, apiKey);
+        usedModel = 'turbo';
+        fallbackUsed = true;
+        console.log(`Pollinations response status for turbo:`, response.status);
+      } else {
+        // Other error, return as is
+        return {
+          statusCode: response.status,
+          headers,
+          body: JSON.stringify({ 
+            error: 'Failed to generate image',
+            status: response.status,
+            details: errorText,
+          }),
+        };
+      }
+    }
 
-    console.log('Pollinations response status:', response.status);
-
+    // Check if fallback also failed
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Pollinations API error: ${response.status} ${response.statusText}`, errorText);
+      console.error(`Pollinations API error with ${usedModel}: ${response.status}`, errorText);
+      
+      // Check if it's a token/quota exhausted error
+      if (isTokenExhaustedError(errorText)) {
+        return {
+          statusCode: response.status,
+          headers,
+          body: JSON.stringify({ 
+            error: 'API 调用请求成功，但是 token 已用完，请联系 ibby 充值。',
+            errorCode: 'TOKEN_EXHAUSTED',
+            status: response.status,
+            details: errorText,
+          }),
+        };
+      }
+      
+      // If both flux and turbo failed with "no active servers"
+      if (fallbackUsed && isNoActiveServersError(errorText)) {
+        return {
+          statusCode: response.status,
+          headers,
+          body: JSON.stringify({ 
+            error: '两种生图模型（flux 和 turbo）当前在官方服务器都暂不可用，请稍后再试。',
+            errorCode: 'ALL_MODELS_UNAVAILABLE',
+            status: response.status,
+            details: errorText,
+          }),
+        };
+      }
+      
       return {
         statusCode: response.status,
         headers,
@@ -89,6 +185,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         imageUrl: `data:${contentType};base64,${base64Image}`,
         seed: seedParam,
+        model: usedModel,
+        fallbackUsed: fallbackUsed,
       }),
     };
   } catch (error) {
