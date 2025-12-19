@@ -92,8 +92,16 @@ exports.handler = async (event) => {
       const errorText = await response.text();
       console.error(`Pollinations API error with flux: ${response.status}`, errorText);
       
-      // Check if it's a token/quota exhausted error
-      if (isTokenExhaustedError(errorText)) {
+      // IMPORTANT: Check "no active servers" FIRST (more specific error)
+      // Then check token errors (to avoid false positives)
+      if (isNoActiveServersError(errorText)) {
+        console.log('Flux servers unavailable, falling back to turbo model...');
+        response = await callPollinationsAPI(encodedPrompt, 'turbo', width, height, seedParam, apiKey);
+        usedModel = 'turbo';
+        fallbackUsed = true;
+        console.log(`Pollinations response status for turbo:`, response.status);
+      } else if (isTokenExhaustedError(errorText)) {
+        // Check if it's a token/quota exhausted error
         return {
           statusCode: response.status,
           headers,
@@ -104,15 +112,6 @@ exports.handler = async (event) => {
             details: errorText,
           }),
         };
-      }
-      
-      // Check if it's "no active servers" error - try fallback to turbo
-      if (isNoActiveServersError(errorText)) {
-        console.log('Flux servers unavailable, falling back to turbo model...');
-        response = await callPollinationsAPI(encodedPrompt, 'turbo', width, height, seedParam, apiKey);
-        usedModel = 'turbo';
-        fallbackUsed = true;
-        console.log(`Pollinations response status for turbo:`, response.status);
       } else {
         // Other error, return as is
         return {
@@ -132,20 +131,7 @@ exports.handler = async (event) => {
       const errorText = await response.text();
       console.error(`Pollinations API error with ${usedModel}: ${response.status}`, errorText);
       
-      // Check if it's a token/quota exhausted error
-      if (isTokenExhaustedError(errorText)) {
-        return {
-          statusCode: response.status,
-          headers,
-          body: JSON.stringify({ 
-            error: 'API 调用请求成功，但是 token 已用完，请联系 ibby 充值。',
-            errorCode: 'TOKEN_EXHAUSTED',
-            status: response.status,
-            details: errorText,
-          }),
-        };
-      }
-      
+      // IMPORTANT: Check "no active servers" FIRST
       // If both flux and turbo failed with "no active servers"
       if (fallbackUsed && isNoActiveServersError(errorText)) {
         return {
@@ -154,6 +140,20 @@ exports.handler = async (event) => {
           body: JSON.stringify({ 
             error: '两种生图模型（flux 和 turbo）当前在官方服务器都暂不可用，请稍后再试。',
             errorCode: 'ALL_MODELS_UNAVAILABLE',
+            status: response.status,
+            details: errorText,
+          }),
+        };
+      }
+      
+      // Check if it's a token/quota exhausted error
+      if (isTokenExhaustedError(errorText)) {
+        return {
+          statusCode: response.status,
+          headers,
+          body: JSON.stringify({ 
+            error: 'API 调用请求成功，但是 token 已用完，请联系 ibby 充值。',
+            errorCode: 'TOKEN_EXHAUSTED',
             status: response.status,
             details: errorText,
           }),
