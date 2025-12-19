@@ -59,6 +59,37 @@ const pixelateImage = (
   return finalCanvas.toDataURL('image/png');
 };
 
+// Helper: Call Pollinations API through Netlify proxy
+const generateImageViaProxy = async (
+  prompt: string,
+  width: number = 512,
+  height: number = 768,
+  model: string = 'flux'
+): Promise<string> => {
+  const seed = Math.floor(Math.random() * 1000000);
+  
+  const response = await fetch('/.netlify/functions/pollinations-proxy', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      width,
+      height,
+      model,
+      seed,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.imageUrl;
+};
+
 interface FrameProps {
   frame: UserFrame;
   onClick?: () => void;
@@ -352,18 +383,8 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         const specialWeatherDesc = getSpecialWeatherDescription(city.specialWeather);
         const specialPrompt = `pixel art, 16-bit retro game screenshot, ${city.visual_prompt}, ${specialWeatherDesc}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background, sci-fi retro aesthetic`.trim();
         
-        const seed = Math.floor(Math.random() * 1000000);
-        const encodedPrompt = encodeURIComponent(specialPrompt);
-        const generatedImageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=768&model=flux&nologo=true&seed=${seed}`;
-
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error("Image failed to load"));
-          img.src = generatedImageUrl;
-        });
+        // Use proxy API with authentication
+        const generatedImageUrl = await generateImageViaProxy(specialPrompt, 512, 768, 'flux');
 
         setImageUrl(generatedImageUrl);
         processPixelArt(generatedImageUrl);
@@ -416,21 +437,8 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       // Optimized prompt for pixel art - emphasize retro game style
       const prompt = `pixel art, 16-bit retro game screenshot, ${city.name_en} city view through window, ${city.visual_prompt}, ${timeLighting}, ${seasonHint}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, dark window frame edges, chunky visible pixels, dithering shading, limited 64 color palette, crisp pixel edges, SNES Super Nintendo graphics, no smoothing, no gradients, old school video game art, 1990s game background`.trim();
 
-      // Use Pollinations.ai - request SMALLER size for authentic pixel look
-      // Smaller native resolution = more pixel-like result when scaled up
-      const seed = Math.floor(Math.random() * 1000000);
-      const encodedPrompt = encodeURIComponent(prompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=768&model=flux&nologo=true&seed=${seed}`;
-
-      // Preload image to verify it loads successfully
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Image failed to load"));
-        img.src = imageUrl;
-      });
+      // Use Pollinations.ai proxy with authentication
+      const imageUrl = await generateImageViaProxy(prompt, 512, 768, 'flux');
 
       setImageUrl(imageUrl);
       

@@ -51,7 +51,16 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
     if (selectedFrame) {
       const city = CITIES_DB.find(c => c.id === selectedFrame.cityId);
       if (city) {
-        fetchRealWeather(city.geo, city.id, city.timezoneOffset).then(setSelectedWeather);
+        // For special locations, use fake weather data
+        if (city.isSpecial) {
+          setSelectedWeather({
+            temp: city.specialTemp ?? 0,
+            weatherCode: 'Clear' as WeatherType,
+            localTime: new Date()
+          });
+        } else {
+          fetchRealWeather(city.geo, city.id, city.timezoneOffset).then(setSelectedWeather);
+        }
       }
     } else {
       setSelectedWeather(null);
@@ -284,9 +293,24 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                       <div className="bg-slate-800/40 backdrop-blur-md p-6 rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
                         <p className="text-xs uppercase tracking-widest text-slate-400 mb-2 font-medium">Temperature</p>
                         {selectedWeather ? (
-                          <p className="text-4xl font-light tracking-tighter text-white">
-                            {selectedWeather.temp}°
-                          </p>
+                          (() => {
+                            const city = CITIES_DB.find(c => c.id === selectedFrame.cityId);
+                            const isSpecial = city?.isSpecial;
+                            const temp = selectedWeather.temp;
+                            // Special display for glitch city (404 error code)
+                            if (isSpecial && temp === 404) {
+                              return <p className="text-4xl font-light tracking-tighter text-red-500 animate-pulse">ERR</p>;
+                            }
+                            // Special color for extreme temperatures
+                            const tempColor = isSpecial 
+                              ? (temp <= -100 ? 'text-cyan-400' : temp <= 0 ? 'text-blue-400' : 'text-emerald-400')
+                              : 'text-white';
+                            return (
+                              <p className={`text-4xl font-light tracking-tighter ${tempColor}`}>
+                                {temp}°
+                              </p>
+                            );
+                          })()
                         ) : (
                           <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                         )}
@@ -294,9 +318,31 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
                       <div className="bg-slate-800/40 backdrop-blur-md p-6 rounded-2xl flex flex-col justify-center border border-white/5 hover:bg-slate-800/60 transition-colors">
                         <p className="text-xs uppercase tracking-widest text-slate-400 mb-2 font-medium">Condition</p>
                         {selectedWeather ? (
-                          <p className="text-xl font-light tracking-wide text-white">
-                            {selectedWeather.weatherCode}
-                          </p>
+                          (() => {
+                            const city = CITIES_DB.find(c => c.id === selectedFrame.cityId);
+                            // For special locations, show special weather description
+                            if (city?.isSpecial && city.specialWeather) {
+                              const specialWeatherText: Record<string, string> = {
+                                'Vacuum': 'Vacuum',
+                                'GasGiant': 'Gas Storm',
+                                'DeepSea': 'Deep Sea',
+                                'Glitch': '??ERROR??'
+                              };
+                              const textColor = city.specialWeather === 'Glitch' 
+                                ? 'text-red-500 animate-pulse' 
+                                : 'text-cyan-400';
+                              return (
+                                <p className={`text-xl font-light tracking-wide ${textColor}`}>
+                                  {specialWeatherText[city.specialWeather] || city.specialWeather}
+                                </p>
+                              );
+                            }
+                            return (
+                              <p className="text-xl font-light tracking-wide text-white">
+                                {selectedWeather.weatherCode}
+                              </p>
+                            );
+                          })()
                         ) : (
                           <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                         )}
