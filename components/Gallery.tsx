@@ -15,10 +15,9 @@ interface GalleryProps {
   onAdd: (nickname: string, cityId: string) => void;
   onDelete: (uuid: string) => void;
   maxFrames: number;
-  weatherType: WeatherType | 'Starry';
 }
 
-const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, weatherType }) => {
+const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames }) => {
   const [selectedFrame, setSelectedFrame] = useState<UserFrame | null>(null);
   const [selectedWeather, setSelectedWeather] = useState<WeatherStatus | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -114,9 +113,9 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames, w
   return (
     <div className="min-h-screen bg-[#0f172a] relative overflow-hidden flex flex-col text-slate-100 selection:bg-indigo-500/30">
       
-      {/* Background Weather Effect (Unified) */}
+      {/* Background Weather Effect - 固定为下雪效果 */}
       <div className="absolute inset-0 opacity-40 pointer-events-none">
-        <WeatherCanvas type={weatherType} speedMultiplier={weatherType === 'Snow' ? 0.4 : 1.0} />
+        <WeatherCanvas type="Snow" speedMultiplier={0.4} />
       </div>
 
       {/* Christmas Decorations */}

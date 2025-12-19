@@ -40,7 +40,7 @@ const ClearSkyEffect: React.FC<ClearSkyEffectProps> = ({ hour, weatherCode }) =>
     resize();
 
     if (isNight) {
-      // 夜晚星星闪烁效果 - 增强版
+      // 夜晚星星闪烁效果 - 精简版，减少数量
       const stars: Array<{
         x: number;
         y: number;
@@ -51,56 +51,72 @@ const ClearSkyEffect: React.FC<ClearSkyEffectProps> = ({ hour, weatherCode }) =>
         color: string;
       }> = [];
 
-      // 流星
+      // 流星 - 修正物理轨迹
       let meteor: {
         x: number;
         y: number;
-        speed: number;
+        vx: number;  // 水平速度
+        vy: number;  // 垂直速度
         length: number;
         opacity: number;
         active: boolean;
+        angle: number; // 运动角度
       } | null = null;
 
-      // 只在画面上半部分生成星星（天空区域）- 增加数量
-      for (let i = 0; i < 30; i++) {
+      // 大幅减少星星数量：从30个减少到8-12个
+      const starCount = Math.floor(Math.random() * 5) + 8;
+      for (let i = 0; i < starCount; i++) {
         const colors = ['#FFFFFF', '#FFE4B5', '#ADD8E6', '#FFF8DC'];
         stars.push({
           x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height * 0.6, // 上60%区域
-          size: Math.random() * 2 + 0.5,
-          opacity: Math.random() * 0.5 + 0.3,
-          twinkleSpeed: Math.random() * 0.05 + 0.02,
+          y: Math.random() * canvas.height * 0.5, // 上50%区域
+          size: Math.random() * 1.5 + 0.5, // 更小的星星
+          opacity: Math.random() * 0.4 + 0.2, // 更暗
+          twinkleSpeed: Math.random() * 0.02 + 0.01, // 更慢的闪烁
           twinklePhase: Math.random() * Math.PI * 2,
           color: colors[Math.floor(Math.random() * colors.length)]
         });
       }
 
+      // 流星生成 - 修正物理轨迹（从左上往右下，或从右上往左下）
       const spawnMeteor = () => {
+        // 随机决定流星方向：从左上到右下，或从右上到左下
+        const goingRight = Math.random() > 0.5;
+        // 流星角度：30-60度之间（相对于水平线）
+        const angle = (Math.random() * 30 + 30) * (Math.PI / 180);
+        const speed = Math.random() * 6 + 8;
+        
         meteor = {
-          x: Math.random() * canvas.width * 0.8 + canvas.width * 0.1,
-          y: Math.random() * canvas.height * 0.2,
-          speed: Math.random() * 8 + 6,
-          length: Math.random() * 60 + 40,
+          x: goingRight 
+            ? Math.random() * canvas.width * 0.3  // 从左侧1/3区域开始
+            : canvas.width * 0.7 + Math.random() * canvas.width * 0.3, // 从右侧1/3区域开始
+          y: Math.random() * canvas.height * 0.15, // 从顶部15%区域开始
+          vx: goingRight ? speed * Math.cos(angle) : -speed * Math.cos(angle),
+          vy: speed * Math.sin(angle), // 始终向下
+          length: Math.random() * 50 + 30,
           opacity: 1,
-          active: true
+          active: true,
+          angle: goingRight ? angle : Math.PI - angle
         };
       };
 
-      // 随机生成流星
+      // 大幅降低流星出现频率：每15秒检查一次，10%概率
       const meteorInterval = setInterval(() => {
         if (!meteor || !meteor.active) {
-          if (Math.random() < 0.3) spawnMeteor();
+          if (Math.random() < 0.1) spawnMeteor();
         }
-      }, 3000);
+      }, 15000);
 
       const animateStars = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         stars.forEach(star => {
           star.twinklePhase += star.twinkleSpeed;
-          const currentOpacity = star.opacity * (0.4 + 0.6 * Math.sin(star.twinklePhase));
+          const currentOpacity = star.opacity * (0.3 + 0.7 * Math.sin(star.twinklePhase));
 
-          // 绘制星星光芒
+          // 只有当透明度足够高时才绘制（减少闪烁频率）
+          if (currentOpacity < 0.15) return;
+
           ctx.save();
           ctx.globalAlpha = currentOpacity;
           
@@ -108,16 +124,16 @@ const ClearSkyEffect: React.FC<ClearSkyEffectProps> = ({ hour, weatherCode }) =>
           ctx.beginPath();
           ctx.fillStyle = star.color;
           ctx.shadowColor = star.color;
-          ctx.shadowBlur = star.size * 3;
+          ctx.shadowBlur = star.size * 2;
           ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
           ctx.fill();
 
-          // 十字光芒 - 更明显
-          if (star.size > 1) {
-            ctx.strokeStyle = `rgba(255, 255, 255, ${currentOpacity * 0.6})`;
-            ctx.lineWidth = 0.5;
+          // 只有较大的星星才有十字光芒
+          if (star.size > 1.2 && currentOpacity > 0.4) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${currentOpacity * 0.4})`;
+            ctx.lineWidth = 0.3;
             ctx.beginPath();
-            const rayLength = star.size * 4;
+            const rayLength = star.size * 3;
             ctx.moveTo(star.x - rayLength, star.y);
             ctx.lineTo(star.x + rayLength, star.y);
             ctx.moveTo(star.x, star.y - rayLength);
@@ -128,40 +144,48 @@ const ClearSkyEffect: React.FC<ClearSkyEffectProps> = ({ hour, weatherCode }) =>
           ctx.restore();
         });
 
-        // 绘制流星
+        // 绘制流星 - 修正物理轨迹
         if (meteor && meteor.active) {
           ctx.save();
+          
+          // 流星尾巴的终点（根据角度计算）
+          const tailX = meteor.x - Math.cos(meteor.angle) * meteor.length;
+          const tailY = meteor.y - Math.sin(meteor.angle) * meteor.length;
+          
           const gradient = ctx.createLinearGradient(
             meteor.x, meteor.y,
-            meteor.x + meteor.length, meteor.y + meteor.length * 0.5
+            tailX, tailY
           );
           gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`);
-          gradient.addColorStop(0.3, `rgba(255, 250, 220, ${meteor.opacity * 0.8})`);
+          gradient.addColorStop(0.2, `rgba(255, 250, 220, ${meteor.opacity * 0.7})`);
           gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
           
           ctx.strokeStyle = gradient;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1.5;
           ctx.lineCap = 'round';
           ctx.beginPath();
           ctx.moveTo(meteor.x, meteor.y);
-          ctx.lineTo(meteor.x + meteor.length, meteor.y + meteor.length * 0.5);
+          ctx.lineTo(tailX, tailY);
           ctx.stroke();
 
           // 流星头部光点
           ctx.fillStyle = `rgba(255, 255, 255, ${meteor.opacity})`;
           ctx.shadowColor = '#FFFFFF';
-          ctx.shadowBlur = 10;
+          ctx.shadowBlur = 8;
           ctx.beginPath();
-          ctx.arc(meteor.x, meteor.y, 2, 0, Math.PI * 2);
+          ctx.arc(meteor.x, meteor.y, 1.5, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
 
-          // 更新流星位置
-          meteor.x -= meteor.speed;
-          meteor.y += meteor.speed * 0.5;
-          meteor.opacity -= 0.015;
+          // 更新流星位置 - 使用正确的速度分量
+          meteor.x += meteor.vx;
+          meteor.y += meteor.vy;
+          meteor.opacity -= 0.012;
           
-          if (meteor.opacity <= 0 || meteor.x < -50 || meteor.y > canvas.height) {
+          // 流星消失条件
+          if (meteor.opacity <= 0 || 
+              meteor.x < -50 || meteor.x > canvas.width + 50 || 
+              meteor.y > canvas.height) {
             meteor.active = false;
           }
         }

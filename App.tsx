@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserFrame, WeatherType } from './types';
+import { UserFrame } from './types';
 import { STORAGE_KEYS, CITIES_DB } from './constants';
 import Onboarding from './components/Onboarding';
 import Gallery from './components/Gallery';
@@ -11,13 +11,6 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<{ name: string; homeCityId: string } | null>(null);
   const [frames, setFrames] = useState<UserFrame[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Unified Background Effect State
-  // Randomly select one: LightRain, Snow, or Starry (Meteors)
-  const [globalWeather] = useState<WeatherType | 'Starry'>(() => {
-    const options: (WeatherType | 'Starry')[] = ['LightRain', 'Snow', 'Starry'];
-    return options[Math.floor(Math.random() * options.length)];
-  });
 
   useEffect(() => {
     const savedProfile = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
@@ -88,7 +81,6 @@ const App: React.FC = () => {
       {!userProfile ? (
         <Onboarding 
           onComplete={handleOnboardingComplete} 
-          weatherType={globalWeather}
         />
       ) : (
         <Gallery 
@@ -96,7 +88,6 @@ const App: React.FC = () => {
           onAdd={handleAddFrame}
           onDelete={handleDeleteFrame}
           maxFrames={MAX_FRAMES}
-          weatherType={globalWeather}
         />
       )}
       <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-[999] bg-[url('/textures/60-lines.png')]" />

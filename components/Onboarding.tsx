@@ -2,16 +2,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CITIES_DB } from '../constants';
-import { Search, Sparkles, MapPin, ChevronRight, ArrowRight } from 'lucide-react';
+import { Search, Sparkles, MapPin, ArrowRight } from 'lucide-react';
 import WeatherCanvas from './WeatherCanvas';
-import { WeatherType } from '../types';
 
 interface OnboardingProps {
   onComplete: (name: string, cityId: string) => void;
-  weatherType: WeatherType | 'Starry';
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete, weatherType }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState<'profile' | 'loading'>('profile');
   const [name, setName] = useState('');
   const [selectedCityId, setSelectedCityId] = useState(CITIES_DB[0].id);
@@ -61,9 +59,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, weatherType }) => {
       {/* 1. Deep Radial Background Gradient for Depth */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1e293b] via-[#0f172a] to-[#020617] opacity-100" />
 
-      {/* 2. Weather Effects - clear visibility */}
+      {/* 2. Weather Effects - 固定为下雪效果 */}
       <div className="absolute inset-0 opacity-100 pointer-events-none mix-blend-screen">
-        <WeatherCanvas type={weatherType} />
+        <WeatherCanvas type="Snow" />
       </div>
 
       {/* 3. Atmospheric Noise Texture */}

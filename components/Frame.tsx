@@ -60,35 +60,93 @@ const pixelateImage = (
   return finalCanvas.toDataURL('image/png');
 };
 
-// Helper: Call Pollinations API through Netlify proxy
-const generateImageViaProxy = async (
+// Pollinations API Key (前端直接调用)
+const POLLINATIONS_API_KEY = 'sk_FJblTy5mhCyMONykg07vxErUL3uwyUm8';
+
+// localStorage 缓存配置
+const CACHE_KEY_PREFIX = 'citypane_img_';
+const CACHE_DURATION_MS = 20 * 60 * 1000; // 20分钟
+
+// 检查 localStorage 缓存是否有效
+const getCachedImage = (cacheKey: string): string | null => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY_PREFIX + cacheKey);
+    if (!cached) return null;
+    
+    const { imageUrl, timestamp } = JSON.parse(cached);
+    const now = Date.now();
+    
+    // 检查是否在20分钟内
+    if (now - timestamp < CACHE_DURATION_MS) {
+      return imageUrl;
+    }
+    
+    // 过期了，删除缓存
+    localStorage.removeItem(CACHE_KEY_PREFIX + cacheKey);
+    return null;
+  } catch (e) {
+    return null;
+  }
+};
+
+// 保存图片到 localStorage 缓存
+const setCachedImage = (cacheKey: string, imageUrl: string): void => {
+  try {
+    const data = {
+      imageUrl,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(CACHE_KEY_PREFIX + cacheKey, JSON.stringify(data));
+  } catch (e) {
+    console.warn('localStorage 存储失败，可能已满', e);
+  }
+};
+
+// Helper: 直接调用 Pollinations API (前端化)
+const generateImageDirect = async (
   prompt: string,
   width: number = 512,
   height: number = 768,
   model: string = 'flux'
 ): Promise<string> => {
   const seed = Math.floor(Math.random() * 1000000);
+  const encodedPrompt = encodeURIComponent(prompt);
   
-  const response = await fetch('/.netlify/functions/pollinations-proxy', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      prompt,
-      width,
-      height,
-      model,
-      seed,
-    }),
-  });
+  // 调用 Pollinations API
+  const callAPI = async (modelName: string): Promise<Response> => {
+    const url = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${modelName}&width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
+    return fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${POLLINATIONS_API_KEY}` },
+    });
+  };
 
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+  // 先尝试 flux 模型
+  let response = await callAPI(model);
+  
+  // 如果 flux 失败，尝试 turbo
+  if (!response.ok && model === 'flux') {
+    const errorText = await response.text();
+    const lowerError = errorText.toLowerCase();
+    
+    if (lowerError.includes('no active') && lowerError.includes('servers')) {
+      console.log('Flux 服务器不可用，切换到 turbo...');
+      response = await callAPI('turbo');
+    }
   }
 
-  const data = await response.json();
-  return data.imageUrl;
+  if (!response.ok) {
+    throw new Error(`API 请求失败: ${response.status}`);
+  }
+
+  // 获取图片并转为 base64
+  const imageBlob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(imageBlob);
+  });
 };
 
 interface FrameProps {
@@ -409,19 +467,16 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
     
     // Check aurora condition for cache key (not applicable for special locations)
     const hasAuroraForCache = !city.isSpecial && weather ? shouldShowAurora(city.geo.lat, weather.localTime) : false;
-    const cacheKey = `pixel_art_v14_${city.id}_${timeOfDay}_${weatherCode}_${season.name}_${season.month}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
+    const cacheKey = `v15_${city.id}_${timeOfDay}_${weatherCode}_${season.name}_${season.month}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
 
-    // Check cache first
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        setImageUrl(cached);
-        processPixelArt(cached);
-        setIsGenerating(false);
-        return;
-      }
-    } catch (e) {
-      console.warn("Could not read from session storage", e);
+    // 检查 localStorage 缓存（20分钟防抖）
+    const cachedImage = getCachedImage(cacheKey);
+    if (cachedImage) {
+      console.log('使用 localStorage 缓存的图片');
+      setImageUrl(cachedImage);
+      processPixelArt(cachedImage);
+      setIsGenerating(false);
+      return;
     }
 
     try {
@@ -430,17 +485,14 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         const specialWeatherDesc = getSpecialWeatherDescription(city.specialWeather);
         const specialPrompt = `beautiful digital painting, ${city.visual_prompt}, ${specialWeatherDesc}, atmospheric perspective, cinematic composition, rich details, sci-fi aesthetic, mysterious otherworldly atmosphere, dramatic lighting`.trim();
         
-        // Use proxy API with authentication
-        const generatedImageUrl = await generateImageViaProxy(specialPrompt, 512, 768, 'flux');
+        // 直接调用 Pollinations API (前端化)
+        const generatedImageUrl = await generateImageDirect(specialPrompt, 512, 768, 'flux');
 
         setImageUrl(generatedImageUrl);
         processPixelArt(generatedImageUrl);
         
-        try {
-          sessionStorage.setItem(cacheKey, generatedImageUrl);
-        } catch (storageError) {
-          console.warn("Storage quota exceeded, skipping cache for this image.");
-        }
+        // 保存到 localStorage 缓存
+        setCachedImage(cacheKey, generatedImageUrl);
         
         setIsGenerating(false);
         return;
@@ -480,20 +532,16 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       // Emphasize scenic beauty, atmospheric details, and accurate seasonal representation
       const prompt = `beautiful digital painting, ${city.name_en} cityscape viewed through a window, ${city.visual_prompt}, ${timeLighting}, ${seasonPrompt}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, atmospheric perspective, rich environmental details, cinematic composition, masterful lighting, high quality artwork`.trim();
 
-      // Use Pollinations.ai proxy with authentication
-      const imageUrl = await generateImageViaProxy(prompt, 512, 768, 'flux');
+      // 直接调用 Pollinations API (前端化)
+      const generatedUrl = await generateImageDirect(prompt, 512, 768, 'flux');
 
-      setImageUrl(imageUrl);
+      setImageUrl(generatedUrl);
       
       // Apply pixel post-processing - this handles the retro aesthetic
-      processPixelArt(imageUrl);
+      processPixelArt(generatedUrl);
       
-      // Cache the URL
-      try {
-        sessionStorage.setItem(cacheKey, imageUrl);
-      } catch (storageError) {
-        console.warn("Storage quota exceeded, skipping cache for this image.");
-      }
+      // 保存到 localStorage 缓存
+      setCachedImage(cacheKey, generatedUrl);
 
     } catch (e) {
       console.error("Art generation failed", e);
@@ -597,8 +645,8 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
                 <WeatherCanvas type={weather.weatherCode} isExpanded={isExpanded} />
                 <ClearSkyEffect hour={hour} weatherCode={weather.weatherCode} />
                 
-                {/* Overlay gradients for text readability */}
-                <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/70 pointer-events-none z-30 opacity-80" />
+                {/* Overlay gradients for text readability - 夜晚减少黑色蒙层 */}
+                <div className={`absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50 pointer-events-none z-30 ${hour >= 6 && hour < 18 ? 'opacity-80' : 'opacity-50'}`} />
                 
                 {/* Glass reflection effect - only in expanded mode */}
                 {isExpanded && (
