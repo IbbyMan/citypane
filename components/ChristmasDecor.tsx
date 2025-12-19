@@ -160,7 +160,7 @@ const ChristmasDecor: React.FC<ChristmasDecorProps> = ({ enabled = true }) => {
             className="absolute z-30"
           >
             <img 
-              src="/extra-docu/chrismas1.png" 
+              src="/extra-docu/chrismas1.webp" 
               alt="Santa" 
               className="h-24 w-auto object-contain"
               style={{ imageRendering: 'auto', opacity: 0.6 }}
