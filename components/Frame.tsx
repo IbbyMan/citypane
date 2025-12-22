@@ -547,8 +547,8 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       // Emphasize scenic beauty, atmospheric details, and accurate seasonal representation
       const prompt = `beautiful digital painting, ${city.name_en} cityscape viewed through a window, ${city.visual_prompt}, ${timeLighting}, ${seasonPrompt}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, atmospheric perspective, rich environmental details, cinematic composition, masterful lighting, high quality artwork`.trim();
 
-      // 负相提示词：避免多个月亮、质量问题等
-      const negativePrompt = 'multiple moons, two moons, double moon, worst quality, blurry, deformed, distorted';
+      // 负相提示词：避免质量问题
+      const negativePrompt = 'worst quality, blurry, deformed, distorted';
 
       // 直接调用 Pollinations API (前端化)
       const generatedUrl = await generateImageDirect(prompt, 512, 768, 'flux', negativePrompt);
