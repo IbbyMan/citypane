@@ -31,9 +31,10 @@ const TimeFilter: React.FC<TimeFilterProps> = ({ hour }) => {
         };
       case 'Night':
         // Dark, cool blue tint, low saturation for colors but high contrast for lights
+        // 大幅减少蒙层，保留原图清晰度
         return {
-          filter: 'brightness(60%) contrast(125%) grayscale(40%) hue-rotate(15deg)',
-          background: 'rgba(5, 10, 30, 0.6)'
+          filter: 'brightness(85%) contrast(110%) grayscale(20%) hue-rotate(10deg)',
+          background: 'rgba(5, 10, 30, 0.15)'
         };
       default:
         return {};

@@ -446,11 +446,21 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
   }, [city, weather?.weatherCode, weather ? getTimeOfDay(weather.localTime.getHours()) : null]);
 
   // Function to trigger generation (exposed for manual retry)
-  const generateArt = async () => {
+  const generateArt = useCallback(async (forceRefresh: boolean = false) => {
     if (!city || !generationKeys) return;
+    
+    // 如果是强制刷新（Retry 或自动刷新），清除缓存
+    if (forceRefresh) {
+      const { timeOfDay, season, weatherCode } = generationKeys;
+      const hasAuroraForCache = !city.isSpecial && weather ? shouldShowAurora(city.geo.lat, weather.localTime) : false;
+      const cacheKey = `v15_${city.id}_${timeOfDay}_${weatherCode}_${season.name}_${season.month}_aurora${hasAuroraForCache ? '1' : '0'}_special${city.isSpecial ? '1' : '0'}`;
+      localStorage.removeItem(CACHE_KEY_PREFIX + cacheKey);
+    }
     
     setHasError(false);
     setIsGenerating(true);
+    setImageUrl(null);
+    setPixelatedUrl(null);
 
     const { timeOfDay, season, weatherCode } = generationKeys;
     const weatherDesc = getWeatherDescription(weatherCode);
@@ -512,7 +522,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         ? 'breathtaking sunset, dramatic orange purple pink sky, sun setting on horizon painting everything in warm colors, city lights beginning to twinkle, magical twilight moment'
         : timeOfDay === 'Evening'
         ? 'romantic blue hour, deep indigo sky after sunset, city lights glowing warmly, first stars appearing, peaceful evening atmosphere'
-        : 'enchanting night scene, starry sky with bright moon, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
+        : 'enchanting night scene, starry sky, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere, never show multiple moons or two moons in the sky';
 
       // Get detailed season description
       const seasonPrompt = getDetailedSeasonPrompt(season);
@@ -549,13 +559,40 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, [city, generationKeys, weather, frame.nickname, firstCityName]);
 
   // Initial Auto-Generation
   useEffect(() => {
     if (!city || !generationKeys || imageUrl || hasError || isGenerating) return;
-    generateArt();
+    generateArt(false);
   }, [city, generationKeys, imageUrl, hasError, isGenerating]);
+
+  // 30分钟自动刷新机制（同步刷新天气和图片）
+  useEffect(() => {
+    if (!city || !generationKeys) return;
+    
+    const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000; // 30分钟
+    
+    const refreshTimer = setInterval(async () => {
+      console.log('30分钟自动刷新触发：刷新天气和图片');
+      
+      // 先刷新天气数据
+      if (!city.isSpecial) {
+        try {
+          const newWeather = await fetchRealWeather(city.geo, city.id, city.timezoneOffset);
+          setWeather(newWeather);
+          console.log('天气数据已刷新:', newWeather);
+        } catch (e) {
+          console.warn('天气刷新失败，继续使用旧数据', e);
+        }
+      }
+      
+      // 然后刷新图片
+      generateArt(true);
+    }, AUTO_REFRESH_INTERVAL);
+    
+    return () => clearInterval(refreshTimer);
+  }, [city, generationKeys]);
 
   if (!city || !weather) {
     // Skeleton Loading State
@@ -618,7 +655,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    generateArt();
+                    generateArt(true);
                   }}
                   className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/30 rounded-full text-white text-xs flex items-center gap-2 transition-all"
                 >

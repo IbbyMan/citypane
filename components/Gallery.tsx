@@ -402,13 +402,13 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames })
                   title="Randomize"
                 >
                   <Dices size={16} className="text-indigo-400 group-hover:rotate-180 duration-500" />
-                  <span className="text-[10px] uppercase tracking-widest text-slate-400 group-hover:text-white font-medium">Random</span>
+                  <span className="text-xs tracking-wider text-slate-400 group-hover:text-white font-serif-sc">不期而遇</span>
                 </button>
               </div>
 
               <div className="flex flex-col gap-8 flex-grow overflow-hidden">
                 <div>
-                  <label className="block text-xs uppercase tracking-[0.2em] text-slate-400 mb-3 font-bold">窗口昵称</label>
+                  <label className="block text-xs uppercase tracking-[0.2em] text-slate-400 mb-3 font-bold">谁在那里</label>
                   <input 
                     type="text" 
                     value={newNickname}
@@ -418,7 +418,7 @@ const Gallery: React.FC<GalleryProps> = ({ frames, onAdd, onDelete, maxFrames })
                   />
                 </div>
                 <div className="flex flex-col min-h-0 flex-grow">
-                  <label className="block text-xs uppercase tracking-[0.2em] text-slate-400 mb-3 font-bold">定位城市</label>
+                  <label className="block text-xs uppercase tracking-[0.2em] text-slate-400 mb-3 font-bold">身处何地</label>
                   <div className="relative mb-4">
                     <SearchIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input 
