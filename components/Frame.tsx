@@ -107,14 +107,19 @@ const generateImageDirect = async (
   prompt: string,
   width: number = 512,
   height: number = 768,
-  model: string = 'flux'
+  model: string = 'flux',
+  negativePrompt: string = ''
 ): Promise<string> => {
   const seed = Math.floor(Math.random() * 1000000);
   const encodedPrompt = encodeURIComponent(prompt);
+  const encodedNegative = negativePrompt ? encodeURIComponent(negativePrompt) : '';
   
   // 调用 Pollinations API
   const callAPI = async (modelName: string): Promise<Response> => {
-    const url = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${modelName}&width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
+    let url = `https://gen.pollinations.ai/image/${encodedPrompt}?model=${modelName}&width=${width}&height=${height}&seed=${seed}&nologo=true&private=true`;
+    if (encodedNegative) {
+      url += `&negative_prompt=${encodedNegative}`;
+    }
     return fetch(url, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${POLLINATIONS_API_KEY}` },
@@ -522,7 +527,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         ? 'breathtaking sunset, dramatic orange purple pink sky, sun setting on horizon painting everything in warm colors, city lights beginning to twinkle, magical twilight moment'
         : timeOfDay === 'Evening'
         ? 'romantic blue hour, deep indigo sky after sunset, city lights glowing warmly, first stars appearing, peaceful evening atmosphere'
-        : 'enchanting night scene, starry sky, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere, never show multiple moons or two moons in the sky';
+        : 'enchanting night scene, starry sky with single moon, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
 
       // Get detailed season description
       const seasonPrompt = getDetailedSeasonPrompt(season);
@@ -542,8 +547,11 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
       // Emphasize scenic beauty, atmospheric details, and accurate seasonal representation
       const prompt = `beautiful digital painting, ${city.name_en} cityscape viewed through a window, ${city.visual_prompt}, ${timeLighting}, ${seasonPrompt}, ${weatherDesc}, ${weatherWindow}${auroraPrompt}, atmospheric perspective, rich environmental details, cinematic composition, masterful lighting, high quality artwork`.trim();
 
+      // 负相提示词：避免多个月亮、质量问题等
+      const negativePrompt = 'multiple moons, two moons, double moon, worst quality, blurry, deformed, distorted';
+
       // 直接调用 Pollinations API (前端化)
-      const generatedUrl = await generateImageDirect(prompt, 512, 768, 'flux');
+      const generatedUrl = await generateImageDirect(prompt, 512, 768, 'flux', negativePrompt);
 
       setImageUrl(generatedUrl);
       
