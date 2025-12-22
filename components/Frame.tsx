@@ -527,7 +527,7 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         ? 'breathtaking sunset, dramatic orange purple pink sky, sun setting on horizon painting everything in warm colors, city lights beginning to twinkle, magical twilight moment'
         : timeOfDay === 'Evening'
         ? 'romantic blue hour, deep indigo sky after sunset, city lights glowing warmly, first stars appearing, peaceful evening atmosphere'
-        : 'enchanting night scene, starry sky with single moon, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
+        : 'enchanting night scene, starry sky, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
 
       // Get detailed season description
       const seasonPrompt = getDetailedSeasonPrompt(season);
