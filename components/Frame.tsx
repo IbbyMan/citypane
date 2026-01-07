@@ -241,11 +241,55 @@ const getSeason = (lat: number, date: Date): { name: string; month: number; hemi
   }
 };
 
-// Helper: Get detailed season description based on month and hemisphere
-const getDetailedSeasonPrompt = (season: { name: string; month: number; hemisphere: string }): string => {
+// Helper: Get climate zone based on latitude
+// Used to determine if snow is realistic for a location
+type ClimateZone = 'tropical' | 'subtropical' | 'temperate' | 'subarctic' | 'arctic';
+
+const getClimateZone = (lat: number): ClimateZone => {
+  const absLat = Math.abs(lat);
+  if (absLat < 23.5) return 'tropical';      // 热带：赤道附近，全年高温，不会下雪
+  if (absLat < 35) return 'subtropical';     // 亚热带：温暖，极少下雪
+  if (absLat < 55) return 'temperate';       // 温带：四季分明，冬季可能下雪
+  if (absLat < 66.5) return 'subarctic';     // 亚寒带：冬季寒冷，常有雪
+  return 'arctic';                            // 寒带：极地气候，常年积雪
+};
+
+// Helper: Determine if snow should appear in the scene
+// Based on climate zone, actual temperature, and weather code
+const shouldShowSnowInScene = (
+  climateZone: ClimateZone,
+  temperature: number,
+  weatherCode: WeatherType
+): boolean => {
+  // 如果天气API返回的就是下雪，那就显示雪
+  if (weatherCode === 'Snow') return true;
+  
+  // 热带地区：永远不显示雪（除非API返回Snow）
+  if (climateZone === 'tropical') return false;
+  
+  // 亚热带地区：只有温度低于-2°C才可能有雪的痕迹
+  if (climateZone === 'subtropical') return temperature <= -2;
+  
+  // 温带地区：温度低于2°C时可能有雪
+  if (climateZone === 'temperate') return temperature <= 2;
+  
+  // 亚寒带和寒带：温度低于5°C时可能有雪
+  return temperature <= 5;
+};
+
+// Helper: Get detailed season description based on month, hemisphere, climate zone, and actual weather
+const getDetailedSeasonPrompt = (
+  season: { name: string; month: number; hemisphere: string },
+  climateZone: ClimateZone,
+  temperature: number,
+  weatherCode: WeatherType
+): string => {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                       'July', 'August', 'September', 'October', 'November', 'December'];
   const monthName = monthNames[season.month];
+  
+  // 判断是否应该显示雪景
+  const showSnow = shouldShowSnowInScene(climateZone, temperature, weatherCode);
   
   switch (season.name) {
     case 'Spring':
@@ -273,12 +317,38 @@ const getDetailedSeasonPrompt = (season: { name: string; month: number; hemisphe
       return `mid-autumn in ${monthName}, ${season.hemisphere} hemisphere, beautiful golden red orange maple leaves, peak fall foliage, warm amber tones, cool pleasant weather, romantic autumn atmosphere`;
     
     case 'Winter':
-      if (season.month === 11 || season.month === 5) { // December or June (early winter)
-        return `early winter in ${monthName}, ${season.hemisphere} hemisphere, first snow possible, bare trees, cold crisp air, holiday season atmosphere, cozy warm lights`;
-      } else if (season.month === 1 || season.month === 7) { // February or August (late winter)
-        return `late winter in ${monthName}, ${season.hemisphere} hemisphere, deep cold, snow on ground, bare branches, hints of spring approaching, end of winter`;
+      // 根据气候带和实际天气决定冬季描述
+      if (showSnow) {
+        // 有雪的冬季场景（温带/寒带低温或正在下雪）
+        if (season.month === 11 || season.month === 5) {
+          return `early winter in ${monthName}, ${season.hemisphere} hemisphere, first snow falling, bare trees, cold crisp air, holiday season atmosphere, cozy warm lights`;
+        } else if (season.month === 1 || season.month === 7) {
+          return `late winter in ${monthName}, ${season.hemisphere} hemisphere, deep cold, snow on ground, bare branches, hints of spring approaching, end of winter`;
+        }
+        return `mid-winter in ${monthName}, ${season.hemisphere} hemisphere, cold snowy weather, bare trees covered in frost, white snow blanket, cozy warm interior lights, winter wonderland`;
+      } else {
+        // 无雪的冬季场景（热带/亚热带或温带暖冬）
+        if (climateZone === 'tropical') {
+          // 热带：干季/凉季
+          return `tropical dry season in ${monthName}, mild pleasant weather, lush green tropical vegetation, comfortable temperature, clear skies, gentle breeze`;
+        } else if (climateZone === 'subtropical') {
+          // 亚热带：温和冬季
+          if (season.month === 11 || season.month === 5) {
+            return `early winter in ${monthName}, ${season.hemisphere} hemisphere, mild cool weather, some trees still green, comfortable temperature, cozy atmosphere, no snow`;
+          } else if (season.month === 1 || season.month === 7) {
+            return `late winter in ${monthName}, ${season.hemisphere} hemisphere, cool pleasant weather, early spring hints, mild temperature, fresh air, no snow on ground`;
+          }
+          return `mild winter in ${monthName}, ${season.hemisphere} hemisphere, cool but comfortable weather, mostly green vegetation, bare deciduous trees, no snow, cozy warm lights`;
+        } else {
+          // 温带暖冬（温度高于冰点）
+          if (season.month === 11 || season.month === 5) {
+            return `early winter in ${monthName}, ${season.hemisphere} hemisphere, cool weather, bare trees, grey skies, no snow yet, cozy warm lights`;
+          } else if (season.month === 1 || season.month === 7) {
+            return `late winter in ${monthName}, ${season.hemisphere} hemisphere, cool weather, bare branches, hints of spring approaching, mild temperature, no snow`;
+          }
+          return `mild winter in ${monthName}, ${season.hemisphere} hemisphere, cool grey weather, bare trees, overcast skies, no snow on ground, cozy warm interior lights`;
+        }
       }
-      return `mid-winter in ${monthName}, ${season.hemisphere} hemisphere, cold snowy weather, bare trees covered in frost, white snow blanket, cozy warm interior lights, winter wonderland`;
     
     default:
       return '';
@@ -529,8 +599,9 @@ const Frame: React.FC<FrameProps> = ({ frame, onClick, isExpanded, firstCityName
         ? 'romantic blue hour, deep indigo sky after sunset, city lights glowing warmly, first stars appearing, peaceful evening atmosphere'
         : 'enchanting night scene, starry sky, warm glowing windows and neon signs, city lights twinkling, cozy nighttime atmosphere';
 
-      // Get detailed season description
-      const seasonPrompt = getDetailedSeasonPrompt(season);
+      // Get detailed season description with climate-aware snow logic
+      const climateZone = getClimateZone(city.geo.lat);
+      const seasonPrompt = getDetailedSeasonPrompt(season, climateZone, weather!.temp, weatherCode);
 
       // Build weather effect for window
       const weatherWindow = weatherCode === 'LightRain' || weatherCode === 'HeavyRain' 
